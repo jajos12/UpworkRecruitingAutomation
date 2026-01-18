@@ -89,124 +89,135 @@
         </aside>
 
         <!-- Main Content Area -->
+        <!-- Main Content Area (Flex Container) -->
         <main class="main-content">
 
-            <!-- Page: Dashboard -->
-            <div id="page-dashboard" class="page active">
-                <div class="page-header">
-                    <h1>Dashboard</h1>
-                    <div class="header-actions">
-                        <button class="btn btn-secondary" onclick="seedMockData()">
-                            🎲 Seed Mock Data
-                        </button>
-                        <button class="btn btn-danger" onclick="clearAllData()">
-                            🗑️ Clear All
-                        </button>
+            <!-- Page Container (Left/Center Side) -->
+            <div class="page-container">
+
+                <!-- Page: Dashboard -->
+                <div id="page-dashboard" class="page active">
+                    <div class="page-header">
+                        <h1>Dashboard</h1>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" onclick="seedMockData()">
+                                🎲 Seed Mock Data
+                            </button>
+                            <button class="btn btn-danger" onclick="clearAllData()">
+                                🗑️ Clear All
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="statTotalJobs">0</div>
+                            <div class="stat-label">Active Jobs</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="statTotalProposals">0</div>
+                            <div class="stat-label">Total Proposals</div>
+                        </div>
+                        <div class="stat-card stat-tier1">
+                            <div class="stat-value" id="statTier1">0</div>
+                            <div class="stat-label">Tier 1 Candidates</div>
+                        </div>
+                        <div class="stat-card stat-tier2">
+                            <div class="stat-value" id="statTier2">0</div>
+                            <div class="stat-label">Tier 2 Candidates</div>
+                        </div>
+                        <div class="stat-card stat-tier3">
+                            <div class="stat-value" id="statTier3">0</div>
+                            <div class="stat-label">Tier 3 Candidates</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="statPending">0</div>
+                            <div class="stat-label">Pending Analysis</div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="section">
+                        <h2>Quick Actions</h2>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary btn-large" onclick="showCreateJobModal()">
+                                ➕ Create New Job
+                            </button>
+                            <button class="btn btn-primary btn-large" onclick="showCreateProposalModal()">
+                                📋 Add Proposal
+                            </button>
+                            <button class="btn btn-success btn-large" onclick="analyzeAllJobs()">
+                                ▶️ Analyze All
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Recent Jobs -->
+                    <div class="section">
+                        <h2>Recent Jobs</h2>
+                        <div id="recentJobs" class="job-list">
+                            <p class="empty-state">No jobs yet. Create one to get started!</p>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Stats Cards -->
-                <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="statTotalJobs">0</div>
-                        <div class="stat-label">Active Jobs</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="statTotalProposals">0</div>
-                        <div class="stat-label">Total Proposals</div>
-                    </div>
-                    <div class="stat-card stat-tier1">
-                        <div class="stat-value" id="statTier1">0</div>
-                        <div class="stat-label">Tier 1 Candidates</div>
-                    </div>
-                    <div class="stat-card stat-tier2">
-                        <div class="stat-value" id="statTier2">0</div>
-                        <div class="stat-label">Tier 2 Candidates</div>
-                    </div>
-                    <div class="stat-card stat-tier3">
-                        <div class="stat-value" id="statTier3">0</div>
-                        <div class="stat-label">Tier 3 Candidates</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="statPending">0</div>
-                        <div class="stat-label">Pending Analysis</div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions -->
-                <div class="section">
-                    <h2>Quick Actions</h2>
-                    <div class="action-buttons">
-                        <button class="btn btn-primary btn-large" onclick="showCreateJobModal()">
-                            ➕ Create New Job
-                        </button>
-                        <button class="btn btn-primary btn-large" onclick="showCreateProposalModal()">
-                            📋 Add Proposal
-                        </button>
-                        <button class="btn btn-success btn-large" onclick="analyzeAllJobs()">
-                            ▶️ Analyze All
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Recent Jobs -->
-                <div class="section">
-                    <h2>Recent Jobs</h2>
-                    <div id="recentJobs" class="job-list">
-                        <p class="empty-state">No jobs yet. Create one to get started!</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Page: Jobs -->
-            <div id="page-jobs" class="page">
-                <div class="page-header">
-                    <h1>Job Postings</h1>
-                    <button class="btn btn-primary" onclick="showCreateJobModal()">
-                        ➕ Create Job
-                    </button>
-                </div>
-
-                <div id="jobsList" class="job-list">
-                    <p class="empty-state">No jobs available</p>
-                </div>
-            </div>
-
-            <!-- Page: Proposals -->
-            <div id="page-proposals" class="page">
-                <div class="page-header">
-                    <h1>Proposals</h1>
-                    <div class="header-actions">
-                        <select id="proposalJobFilter" class="filter-select" onchange="filterProposals()">
-                            <option value="">All Jobs</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="showCreateProposalModal()">
-                            ➕ Add Proposal
+                <!-- Page: Jobs -->
+                <div id="page-jobs" class="page">
+                    <div class="page-header">
+                        <h1>Job Postings</h1>
+                        <button class="btn btn-primary" onclick="showCreateJobModal()">
+                            ➕ Create Job
                         </button>
                     </div>
-                </div>
 
-                <div id="proposalsList" class="proposals-grid">
-                    <p class="empty-state">No proposals available</p>
-                </div>
-            </div>
-
-            <!-- Page: Activity Feed -->
-            <div id="page-activity" class="page">
-                <div class="page-header">
-                    <h1>Activity Feed</h1>
-                    <button class="btn btn-secondary" onclick="clearActivityFeed()">
-                        Clear Feed
-                    </button>
-                </div>
-
-                <div id="activityFeed" class="activity-feed">
-                    <div class="activity-item">
-                        <div class="activity-time">Just now</div>
-                        <div class="activity-message">Connected to server</div>
+                    <div id="jobsList" class="job-list">
+                        <p class="empty-state">No jobs available</p>
                     </div>
                 </div>
-            </div>
+
+                <!-- Page: Proposals -->
+                <div id="page-proposals" class="page">
+                    <div class="page-header">
+                        <h1>Proposals</h1>
+                        <div class="header-actions">
+                            <select id="proposalJobFilter" class="filter-select" onchange="filterProposals()">
+                                <option value="">All Jobs</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="showCreateProposalModal()">
+                                ➕ Add Proposal
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="proposalsList" class="proposals-grid">
+                        <p class="empty-state">No proposals available</p>
+                    </div>
+                </div>
+
+                <!-- Page: Activity Feed -->
+                <div id="page-activity" class="page">
+                    <div class="page-header">
+                        <h1>Activity Feed</h1>
+                        <button class="btn btn-secondary" onclick="clearActivityFeed()">
+                            Clear Feed
+                        </button>
+                    </div>
+
+                    <div id="activityFeed" class="activity-feed">
+                        <div class="activity-item">
+                            <div class="activity-time">Just now</div>
+                            <div class="activity-message">Connected to server</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div> <!-- End Page Container -->
+
+            <!-- Detail Panel (Right Side Drawer) -->
+            <aside id="detailPanel" class="detail-panel">
+                <!-- Content injected via JS -->
+            </aside>
 
         </main>
     </div>

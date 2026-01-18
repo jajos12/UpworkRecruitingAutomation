@@ -32,6 +32,7 @@ from backend.data_manager import DataManager
 from backend.websocket_manager import ws_manager
 from backend.mock_data import seed_mock_data
 from backend import mock_data
+from backend.database import init_db
 
 # Existing codebase imports
 from src.utils.logger import setup_logger
@@ -519,6 +520,11 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 @app.on_event("startup")
 async def startup_event():
     """Log startup message and seed initial data."""
+    # Initialize database tables
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("Database initialized successfully")
+    
     logger.info("UpworkRecruitmentAgent Web UI Server Started")
     logger.info("Dashboard available at http://localhost:8000")
     logger.info("API docs available at http://localhost:8000/docs")

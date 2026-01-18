@@ -231,11 +231,98 @@ async function analyzeSingleProposal(proposalId) {
 }
 
 function viewProposalDetails(proposalId) {
-    // TODO: Implement detailed proposal view modal
     const proposal = allProposals.find(p => p.proposal_id === proposalId);
-    if (proposal) {
-        alert(`Proposal from ${proposal.freelancer.name}\n\nScore: ${proposal.ai_score || 'Not analyzed'}\nTier: ${proposal.ai_tier || 'N/A'}\n\n${proposal.ai_reasoning || 'No analysis available'}`);
-    }
+    if (!proposal) return;
+
+    const panel = document.getElementById('detailPanel');
+
+    // Render detailed content
+    panel.innerHTML = `
+        <div class="detail-header">
+            <div>
+                <div class="detail-title">${escapeHtml(proposal.freelancer.name)}</div>
+                <div class="detail-subtitle">${escapeHtml(proposal.freelancer.title)}</div>
+            </div>
+            <div class="detail-close" onclick="closeDetailPanel()">✖</div>
+        </div>
+
+        <div class="detail-body">
+            
+            <!-- AI Summary -->
+            ${proposal.ai_score !== null ? `
+                <div class="detail-section">
+                    <div class="detail-section-title">✨ AI Analysis</div>
+                    <div class="detail-row">
+                        <span class="detail-label">Score</span>
+                        <span class="detail-value" style="color: ${getTierColor(proposal.ai_tier)}">
+                            ${proposal.ai_score}/100
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Tier</span>
+                        <span class="detail-value">
+                            <span class="tier-badge tier-badge-${proposal.ai_tier}">Tier ${proposal.ai_tier}</span>
+                        </span>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <span class="detail-label">Reasoning:</span>
+                        <div class="detail-text" style="margin-top: 6px;">
+                            ${escapeHtml(proposal.ai_reasoning || 'No detailed reasoning provided.')}
+                        </div>
+                    </div>
+                </div>
+            ` : `
+                <div class="detail-section">
+                     <button class="btn btn-success" style="width: 100%;" onclick="analyzeSingleProposal('${proposal.proposal_id}')">
+                        ▶️ Run AI Analysis
+                    </button>
+                </div>
+            `}
+
+            <!-- Stats -->
+            <div class="detail-section">
+                <div class="detail-section-title">📊 Freelancer Stats</div>
+                <div class="detail-row">
+                    <span class="detail-label">Job Success</span>
+                    <span class="detail-value">${proposal.freelancer.job_success_score}%</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Total Earnings</span>
+                    <span class="detail-value">$${formatNumber(proposal.freelancer.total_earnings)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Hourly Rate</span>
+                    <span class="detail-value">$${proposal.freelancer.hourly_rate}/hr</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Bid Amount</span>
+                    <span class="detail-value">$${formatNumber(proposal.bid_amount)}</span>
+                </div>
+            </div>
+
+            <!-- Cover Letter -->
+            <div class="detail-section">
+                <div class="detail-section-title">📝 Cover Letter</div>
+                <div class="detail-text">
+                    ${escapeHtml(proposal.cover_letter)}
+                </div>
+            </div>
+
+             <!-- Actions -->
+            <div class="detail-section">
+                <button class="btn btn-danger" style="width: 100%;" onclick="deleteProposal('${proposal.proposal_id}')">
+                    🗑️ Delete Proposal
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Open panel
+    panel.classList.add('open');
+}
+
+function closeDetailPanel() {
+    document.getElementById('detailPanel').classList.remove('open');
 }
 
 // ============================================================================

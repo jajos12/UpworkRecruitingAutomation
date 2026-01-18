@@ -166,13 +166,18 @@ INSTRUCTIONS:
 1. Evaluate the "Storefront": Assess the freelancer's Bio, Portfolio, and Certifications. Does their profile establish them as an expert in the niche required?
 2. Evaluate the "Pitch": Assess the Cover Letter. Is it personalized? Does it address the specific needs of the Job Description?
 3. Alignment Check: Do the profile and proposal complement each other? A Tier 1 candidate has both a strong storefront and a tailored pitch.
-4. Calculate score (0-100) based on:
+4. Value Assessment (ROI): 
+   - Compare the Bid Amount (${applicant_data.get('bid_amount', 'N/A')}) against the implied budget in the Job Description.
+   - Compare the Bid Amount against the freelancer's Profile Rate (${applicant_data.get('hourly_rate_profile', 'N/A')}).
+   - Is this freelancer providing good value? High-tier experts at professional rates are "Premium Value," while talented but cheaper freelancers are "High ROI."
+5. Calculate score (0-100) based on:
    - Must-haves: Pass/fail (if any fail, max score is 60)
    - Nice-to-haves: Weight-based scoring
+   - Value/ROI: Does the price make sense for the quality?
    - Red flags: Deduct points
    - Profile/Proposal alignment and overall professionalism
-5. Identify specific strengths and red flags
-6. Provide a clear recommendation
+6. Identify specific strengths and red flags
+7. Provide a clear recommendation
 
 Return your evaluation as JSON with this exact structure:
 {{

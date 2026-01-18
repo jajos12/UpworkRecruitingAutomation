@@ -77,7 +77,7 @@ def create_ai_analyzer(
                 logger.warning("OpenAI API key not provided")
                 return None
             
-            if model is None:
+            if not model:  # Handles None and empty string
                 model = os.getenv('AI_MODEL', 'gpt-4o-mini')
             
             return OpenAIAnalyzer(api_key=api_key, model=model)
