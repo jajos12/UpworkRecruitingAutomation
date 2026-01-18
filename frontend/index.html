@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UpworkHireBot - AI Recruitment Automation</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/css/styles.css">
+
+    <!-- Config -->
+    <script src="/js/config.js"></script>
+
+    <!-- Scripts -->
+    <script src="/js/api.js" defer></script>
+    <script src="/js/websocket.js" defer></script>
+    <script src="/js/components.js" defer></script>
+    <script src="/js/forms.js" defer></script>
+    <script src="/js/app.js" defer></script>
+</head>
+
+<body>
+    <!-- Main Container -->
+    <div class="app-container">
+
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">🤖</span>
+                    <span class="logo-text">UpworkHireBot</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+                <a href="#jobs" class="nav-item" data-page="jobs">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-text">Jobs</span>
+                </a>
+                <a href="#proposals" class="nav-item" data-page="proposals">
+                    <span class="nav-icon">📝</span>
+                    <span class="nav-text">Proposals</span>
+                </a>
+                <a href="#activity" class="nav-item" data-page="activity">
+                    <span class="nav-icon">🔔</span>
+                    <span class="nav-text">Activity Feed</span>
+                </a>
+            </nav>
+
+            <!-- AI Settings in Sidebar -->
+            <div class="sidebar-settings">
+                <div class="settings-title">🤖 AI Analysis</div>
+                <div class="setting-group">
+                    <label for="aiProviderSelect">Provider</label>
+                    <select id="aiProviderSelect" class="setting-select" onchange="handleAIProviderChange()">
+                        <option value="claude">Claude (Anthropic)</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="gemini">Gemini (Google)</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="aiModelInput">Model (optional)</label>
+                    <input type="text" id="aiModelInput" class="setting-input" placeholder="e.g. gpt-4o-mini"
+                        onblur="handleAIProviderChange()">
+                </div>
+                <div id="aiStatusBadge" class="ai-status-badge unavailable">
+                    AI Unavailable
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <!-- Connection Status -->
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <!-- Page: Dashboard -->
+            <div id="page-dashboard" class="page active">
+                <div class="page-header">
+                    <h1>Dashboard</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="seedMockData()">
+                            🎲 Seed Mock Data
+                        </button>
+                        <button class="btn btn-danger" onclick="clearAllData()">
+                            🗑️ Clear All
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotalJobs">0</div>
+                        <div class="stat-label">Active Jobs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotalProposals">0</div>
+                        <div class="stat-label">Total Proposals</div>
+                    </div>
+                    <div class="stat-card stat-tier1">
+                        <div class="stat-value" id="statTier1">0</div>
+                        <div class="stat-label">Tier 1 Candidates</div>
+                    </div>
+                    <div class="stat-card stat-tier2">
+                        <div class="stat-value" id="statTier2">0</div>
+                        <div class="stat-label">Tier 2 Candidates</div>
+                    </div>
+                    <div class="stat-card stat-tier3">
+                        <div class="stat-value" id="statTier3">0</div>
+                        <div class="stat-label">Tier 3 Candidates</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statPending">0</div>
+                        <div class="stat-label">Pending Analysis</div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="section">
+                    <h2>Quick Actions</h2>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary btn-large" onclick="showCreateJobModal()">
+                            ➕ Create New Job
+                        </button>
+                        <button class="btn btn-primary btn-large" onclick="showCreateProposalModal()">
+                            📋 Add Proposal
+                        </button>
+                        <button class="btn btn-success btn-large" onclick="analyzeAllJobs()">
+                            ▶️ Analyze All
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Recent Jobs -->
+                <div class="section">
+                    <h2>Recent Jobs</h2>
+                    <div id="recentJobs" class="job-list">
+                        <p class="empty-state">No jobs yet. Create one to get started!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page: Jobs -->
+            <div id="page-jobs" class="page">
+                <div class="page-header">
+                    <h1>Job Postings</h1>
+                    <button class="btn btn-primary" onclick="showCreateJobModal()">
+                        ➕ Create Job
+                    </button>
+                </div>
+
+                <div id="jobsList" class="job-list">
+                    <p class="empty-state">No jobs available</p>
+                </div>
+            </div>
+
+            <!-- Page: Proposals -->
+            <div id="page-proposals" class="page">
+                <div class="page-header">
+                    <h1>Proposals</h1>
+                    <div class="header-actions">
+                        <select id="proposalJobFilter" class="filter-select" onchange="filterProposals()">
+                            <option value="">All Jobs</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="showCreateProposalModal()">
+                            ➕ Add Proposal
+                        </button>
+                    </div>
+                </div>
+
+                <div id="proposalsList" class="proposals-grid">
+                    <p class="empty-state">No proposals available</p>
+                </div>
+            </div>
+
+            <!-- Page: Activity Feed -->
+            <div id="page-activity" class="page">
+                <div class="page-header">
+                    <h1>Activity Feed</h1>
+                    <button class="btn btn-secondary" onclick="clearActivityFeed()">
+                        Clear Feed
+                    </button>
+                </div>
+
+                <div id="activityFeed" class="activity-feed">
+                    <div class="activity-item">
+                        <div class="activity-time">Just now</div>
+                        <div class="activity-message">Connected to server</div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modal Container -->
+    <div id="modalContainer"></div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+</body>
+
+</html>
