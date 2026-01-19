@@ -68,8 +68,8 @@ class OpenAIAnalyzer(BaseAIAnalyzer):
                     "role": "system",
                     "content": "You are an expert technical recruiter analyzing job applicants. Provide detailed, objective evaluations based on the criteria provided."
                 })
-                # Add temperature for non-reasoning models
-                params["temperature"] = 0.3
+                # # Add temperature for non-reasoning models
+                # params["temperature"] = 0.3
             else:
                 # o1-preview and o1-mini don't support JSON mode yet in some versions, 
                 # but they are very good at following instructions.
