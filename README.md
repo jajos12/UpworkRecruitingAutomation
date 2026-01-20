@@ -29,6 +29,31 @@ An AI-powered automation tool designed to transform the Upwork hiring process. T
 - An Upwork Client Account (and API keys if using real extraction).
 - API Keys for at least one AI provider (Anthropic, OpenAI, or Google).
 
+## 🗄️ Database Setup
+
+The application supports both **SQLite** (default for simple local testing) and **PostgreSQL/Supabase**.
+
+### Option 1: SQLite (Default)
+No extra configuration needed. The app will create `upwork_agent.db` locally.
+
+### Option 2: Supabase (Local & Production)
+1.  **Install dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  **Set Environment Variable**:
+    Add `DATABASE_URL` to your `.env` file.
+    
+    *For Local Supabase CLI:*
+    ```
+    DATABASE_URL="postgresql://postgres:postgres@localhost:54322/postgres"
+    ```
+    
+    *For Hosted Supabase:*
+    ```
+    DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres"
+    ```
+
 ## ⚡ Installation
 
 1.  **Clone the repository**
