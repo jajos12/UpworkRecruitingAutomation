@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field
 # Job Models
 # ============================================================================
 
+class GenerateCriteriaRequest(BaseModel):
+    """Request model for generating criteria from description."""
+    description: str = Field(..., min_length=10)
+
+
 class JobCriteriaModel(BaseModel):
     """Hiring criteria for a job."""
     must_have: List[str] = Field(default_factory=list, description="Hard requirements")
@@ -149,3 +154,20 @@ class ProgressEvent(BaseModel):
     phase: str
     progress: float  # 0.0 to 1.0
     message: str
+
+
+class ConfigUpdate(BaseModel):
+    """Model for updating system configuration."""
+    # AI Configuration
+    ai_provider: Optional[str] = Field(None, description="AI Provider (openai, gemini, claude)")
+    api_key: Optional[str] = Field(None, description="API Key for the provider")
+    model_name: Optional[str] = Field(None, description="Specific model to use")
+    
+    # Upwork Configuration
+    upwork_client_id: Optional[str] = Field(None, description="Upwork OAuth2 Client ID")
+    upwork_client_secret: Optional[str] = Field(None, description="Upwork OAuth2 Client Secret")
+    upwork_access_token: Optional[str] = Field(None, description="Upwork OAuth2 Access Token")
+    
+    # Google Sheets Configuration
+    google_sheets_creds_json: Optional[str] = Field(None, description="JSON string of service account credentials")
+    google_sheet_id: Optional[str] = Field(None, description="Master Google Sheet ID")

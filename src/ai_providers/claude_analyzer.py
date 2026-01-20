@@ -78,6 +78,44 @@ class ClaudeAnalyzer(BaseAIAnalyzer):
         except Exception as e:
             logger.error(f"Claude evaluation failed: {e}")
             raise
+
+    def generate_criteria(self, job_description: str) -> Dict[str, Any]:
+        """Generate criteria using Claude."""
+        logger.info("Generating criteria from job description...")
+        
+        prompt = f"""
+        You are an expert technical recruiter. Analyze the following job description and extract key hiring criteria.
+        
+        JOB DESCRIPTION:
+        {job_description}
+        
+        Return valid JSON with this exact structure:
+        {{
+            "must_have": ["list of 3-7 absolute hard requirements"],
+            "nice_to_have": [
+                {{"text": "requirement description", "weight": "High/Medium/Low"}}
+            ],
+            "red_flags": ["list of 3-5 warning signs or negative indicators mentioned or implied"]
+        }}
+        """
+        
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            
+            result_text = response.content[0].text
+            return self._parse_json_response(result_text)
+            
+        except Exception as e:
+            logger.error(f"Claude criteria generation failed: {e}")
+            return {
+                "must_have": [],
+                "nice_to_have": [],
+                "red_flags": []
+            }
     
     def evaluate_batch(
         self,

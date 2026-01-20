@@ -15,9 +15,29 @@ const API = {
         return await response.json();
     },
 
+    async generateCriteria(description) {
+        const response = await fetch(apiUrl('/jobs/generate-criteria'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description })
+        });
+        if (!response.ok) throw new Error('Failed to generate criteria');
+        return await response.json();
+    },
+
     async getJobs() {
         const response = await fetch(apiUrl('/jobs'));
         if (!response.ok) throw new Error('Failed to fetch jobs');
+        return await response.json();
+    },
+
+    async updateJob(jobId, jobData) {
+        const response = await fetch(apiUrl(`/jobs/${jobId}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jobData)
+        });
+        if (!response.ok) throw new Error('Failed to update job');
         return await response.json();
     },
 
@@ -85,8 +105,8 @@ const API = {
         return await response.json();
     },
 
-    async analyzeJobProposals(jobId) {
-        const response = await fetch(apiUrl(`/analyze/job/${jobId}`), {
+    async analyzeJobProposals(jobId, force = false) {
+        const response = await fetch(apiUrl(`/analyze/job/${jobId}${force ? '?force=true' : ''}`), {
             method: 'POST'
         });
         if (!response.ok) {

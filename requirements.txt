@@ -16,3 +16,4 @@ fastapi>=0.100.0
 python-dotenv>=1.0.0
 tenacity>=8.2.2
 httpx>=0.24.0
+gspread

@@ -28,6 +28,9 @@ function createJobCard(job) {
                 <button class="btn btn-primary" onclick="viewJobProposals('${job.job_id}')">
                     View Proposals
                 </button>
+                <button class="btn btn-secondary" onclick="showEditJobModal('${job.job_id}')">
+                    ✏️ Edit
+                </button>
                 <button class="btn btn-success" onclick="analyzeJob('${job.job_id}')">
                     ▶️ Analyze
                 </button>

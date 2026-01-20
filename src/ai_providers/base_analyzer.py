@@ -39,6 +39,22 @@ class BaseAIAnalyzer(ABC):
         pass
     
     @abstractmethod
+    def generate_criteria(self, job_description: str) -> Dict[str, Any]:
+        """
+        Generate hiring criteria from a job description.
+        
+        Args:
+            job_description: Full job description text
+            
+        Returns:
+            Dictionary with:
+                - must_have (List[str]): Essential requirements
+                - nice_to_have (List[Dict]): Preferences with expected importance
+                - red_flags (List[str]): Warning signs to look for
+        """
+        pass
+    
+    @abstractmethod
     def evaluate_batch(
         self,
         applicants: List[Dict[str, Any]],

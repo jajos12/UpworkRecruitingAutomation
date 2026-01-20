@@ -23,6 +23,9 @@ function showCreateJobModal() {
                         <label for="jobDescription">Job Description *</label>
                         <textarea id="jobDescription" rows="6" required 
                                   placeholder="Describe the job requirements, tech stack, and project details..."></textarea>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="generateCriteria()" style="margin-top: 0.5rem;">
+                            ✨ Auto-Generate Criteria from Description
+                        </button>
                     </div>
                     
                     <div class="form-group">
@@ -57,6 +60,45 @@ Generic cover letter"></textarea>
     `;
 
     document.getElementById('modalContainer').innerHTML = modalHTML;
+}
+
+async function generateCriteria() {
+    const description = document.getElementById('jobDescription').value;
+    if (!description || description.length < 20) {
+        showToast('Please enter a longer job description first', 'warning');
+        return;
+    }
+
+    const btn = document.querySelector('button[onclick="generateCriteria()"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '✨ Generating...';
+    btn.disabled = true;
+
+    try {
+        const criteria = await API.generateCriteria(description);
+        
+        // Populate fields
+        if (criteria.must_have) {
+            document.getElementById('mustHaveCriteria').value = criteria.must_have.join('\n');
+        }
+        
+        if (criteria.nice_to_have) {
+            document.getElementById('niceToHaveCriteria').value = criteria.nice_to_have
+                .map(item => `${item.text} | ${item.weight || 'Medium'}`)
+                .join('\n');
+        }
+        
+        if (criteria.red_flags) {
+            document.getElementById('redFlagsCriteria').value = criteria.red_flags.join('\n');
+        }
+        
+        showToast('Criteria generated successfully!', 'success');
+    } catch (error) {
+        showToast('Failed to generate criteria: ' + error.message, 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
 }
 
 async function handleCreateJob(event) {
@@ -98,6 +140,121 @@ async function handleCreateJob(event) {
         await updateDashboardStats();
     } catch (error) {
         showToast('Failed to create job: ' + error.message, 'error');
+    }
+}
+
+// ============================================================================
+// Job Editing Form
+// ============================================================================
+
+async function showEditJobModal(jobId) {
+    try {
+        const job = await API.getJob(jobId);
+        
+        let niceToHaveText = '';
+        if (job.criteria && job.criteria.nice_to_have) {
+            niceToHaveText = job.criteria.nice_to_have
+                .map(item => `${item.text || item.criterion} | ${item.weight}`)
+                .join('\n');
+        }
+
+        const modalHTML = `
+            <div class="modal-overlay" onclick="closeModal()">
+                <div class="modal-content" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2>Edit Job Criteria</h2>
+                        <button class="modal-close" onclick="closeModal()">×</button>
+                    </div>
+                    
+                    <form id="editJobForm" onsubmit="handleEditJob(event, '${jobId}')">
+                        <div class="form-group">
+                            <label for="jobTitle">Job Title</label>
+                            <input type="text" id="jobTitle" required value="${escapeHtml(job.title)}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="jobDescription">Job Description</label>
+                            <textarea id="jobDescription" rows="6" required>${escapeHtml(job.description)}</textarea>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="generateCriteria()" style="margin-top: 0.5rem;">
+                                ✨ Re-Generate Criteria
+                            </button>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Must Have Criteria (one per line)</label>
+                            <textarea id="mustHaveCriteria" rows="4">${job.criteria?.must_have?.join('\n') || ''}</textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Nice to Have (format: criterion | weight)</label>
+                            <textarea id="niceToHaveCriteria" rows="3">${niceToHaveText}</textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Red Flags (one per line)</label>
+                            <textarea id="redFlagsCriteria" rows="3">${job.criteria?.red_flags?.join('\n') || ''}</textarea>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('modalContainer').innerHTML = modalHTML;
+    } catch (error) {
+        showToast('Failed to load job details: ' + error.message, 'error');
+    }
+}
+
+async function handleEditJob(event, jobId) {
+    event.preventDefault();
+
+    const title = document.getElementById('jobTitle').value;
+    const description = document.getElementById('jobDescription').value;
+    const mustHaveText = document.getElementById('mustHaveCriteria').value;
+    const niceToHaveText = document.getElementById('niceToHaveCriteria').value;
+    const redFlagsText = document.getElementById('redFlagsCriteria').value;
+
+    // Parse criteria
+    const must_have = mustHaveText.split('\n').filter(line => line.trim());
+
+    const nice_to_have = niceToHaveText.split('\n')
+        .filter(line => line.trim())
+        .map(line => {
+            const [criterion, weight] = line.split('|').map(s => s.trim());
+            return { text: criterion, weight: isNaN(parseInt(weight)) ? weight : parseInt(weight) };
+        });
+
+    const red_flags = redFlagsText.split('\n').filter(line => line.trim());
+
+    const jobData = {
+        title,
+        description,
+        criteria: {
+            must_have,
+            nice_to_have,
+            red_flags
+        }
+    };
+
+    try {
+        await API.updateJob(jobId, jobData);
+        showToast('Job updated successfully!', 'success');
+        closeModal();
+        
+        // Ask to re-analyze
+        if (confirm('Job criteria updated. Do you want to re-analyze all candidates?')) {
+            await API.analyzeJobProposals(jobId, true);
+            showToast('Re-analysis started...', 'info');
+        }
+        
+        await loadJobs();
+    } catch (error) {
+        showToast('Failed to update job: ' + error.message, 'error');
     }
 }
 

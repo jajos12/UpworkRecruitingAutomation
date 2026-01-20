@@ -26,7 +26,8 @@ load_dotenv()
 # Backend imports
 from backend.models import (
     JobCreate, JobResponse, ProposalCreate, ProposalResponse,
-    PipelineRunRequest, PipelineStatus, DaemonStatus, AnalysisResult
+    PipelineRunRequest, PipelineStatus, DaemonStatus, AnalysisResult,
+    GenerateCriteriaRequest, JobCriteriaModel, ConfigUpdate
 )
 from backend.data_manager import DataManager
 from backend.websocket_manager import ws_manager
@@ -36,8 +37,18 @@ from backend.database import init_db
 
 # Existing codebase imports
 from src.utils.logger import setup_logger
-from src.utils.config_loader import ConfigLoader, AIConfig, JobCriteria
+from src.utils.config_loader import (
+    ConfigLoader, AIConfig, JobCriteria, UpworkConfig, 
+    GoogleSheetsConfig, CommunicationConfig, NotificationConfig
+)
 from src.ai_analyzer import AIAnalyzer
+from src.pipeline import Pipeline
+from src.upwork_client import UpworkClient
+from src.sheets_manager import SheetsManager
+from src.communicator import Communicator
+
+from fastapi import BackgroundTasks
+import threading
 
 # Initialize logger
 logger = setup_logger("backend", level="INFO")
@@ -97,6 +108,265 @@ async def root():
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+def run_pipeline_task(request: PipelineRunRequest):
+    """Background task to run the pipeline."""
+    global pipeline_status
+    
+    pipeline_status.running = True
+    pipeline_status.current_phase = "initializing"
+    pipeline_status.message = "Initializing pipeline components..."
+    
+    try:
+        # Construct Configs from Env
+        upwork_conf = UpworkConfig(
+            client_id=os.getenv("UPWORK_CLIENT_ID", ""),
+            client_secret=os.getenv("UPWORK_CLIENT_SECRET", ""),
+            access_token=os.getenv("UPWORK_ACCESS_TOKEN", ""), 
+            refresh_token=os.getenv("UPWORK_REFRESH_TOKEN", "")
+        )
+        
+        # Check if secrets file exists
+        sheets_creds = "secrets/gcp_service_account.json"
+        
+        sheets_conf = GoogleSheetsConfig(
+            credentials_path=sheets_creds,
+            spreadsheet_id=os.getenv("GOOGLE_SHEET_ID", "")
+        )
+        
+        comm_conf = CommunicationConfig(
+            auto_respond_tier1=True,
+            follow_up_after_hours=48,
+            batch_decline_tier3=True
+        )
+        
+        # Initialize Components
+        
+        # Upwork
+        try:
+             upwork_client = UpworkClient(upwork_conf)
+        except Exception as e:
+             logger.error(f"Failed to init UpworkClient: {e}")
+             if request.fetch:
+                 raise Exception("Upwork Client failed to initialize. Check credentials.")
+             upwork_client = None
+
+        # Sheets
+        try:
+             sheets_manager = SheetsManager(sheets_conf)
+        except Exception as e:
+             logger.error(f"Failed to init SheetsManager: {e}")
+             sheets_manager = None
+             
+        # Communicator
+        try:
+             loader = ConfigLoader() 
+             communicator = Communicator(
+                 upwork_client=upwork_client,
+                 sheets_manager=sheets_manager,
+                 config=comm_conf,
+                 ai_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+                 config_loader=loader
+             )
+        except Exception as e:
+             logger.error(f"Failed to init Communicator: {e}")
+             communicator = None
+
+        if not ai_analyzer:
+            # We can still run extraction even if AI is down
+            if request.analyze:
+                raise Exception("AI Analyzer not initialized.")
+
+        # Initialize Pipeline
+        pipeline = Pipeline(
+            upwork_client=upwork_client,
+            ai_analyzer=ai_analyzer,
+            sheets_manager=sheets_manager,
+            communicator=communicator,
+            config_loader=ConfigLoader()
+        )
+        
+        pipeline_status.current_phase = "running"
+        pipeline_status.message = "Pipeline running..."
+        
+        # Run
+        # Note: pipeline.run_full_pipeline is synchronous and blocking
+        results = pipeline.run_full_pipeline(
+            fetch=request.fetch,
+            analyze=request.analyze,
+            communicate=request.communicate,
+            dry_run=request.dry_run
+        )
+        
+        pipeline_status.stats = results
+        pipeline_status.message = "Pipeline completed successfully"
+        
+    except Exception as e:
+        logger.error(f"Pipeline failed: {e}")
+        pipeline_status.message = f"Error: {str(e)}"
+    finally:
+        pipeline_status.running = False
+        pipeline_status.current_phase = "idle"
+
+
+@app.post("/api/pipeline/run")
+async def run_pipeline(request: PipelineRunRequest, background_tasks: BackgroundTasks):
+    """Trigger the full recruitment pipeline."""
+    if pipeline_status.running:
+        raise HTTPException(status_code=400, detail="Pipeline is already running")
+        
+    background_tasks.add_task(run_pipeline_task, request)
+    
+    return {"message": "Pipeline started", "status": "running"}
+
+@app.get("/api/pipeline/status")
+async def get_pipeline_status():
+    """Get current pipeline status."""
+    return pipeline_status
+
+def update_env_file(key: str, value: str):
+    """Updates or adds a key-value pair in the .env file."""
+    env_path = Path(".env")
+    if not env_path.exists():
+        env_path.touch()
+
+    try:
+        content = env_path.read_text()
+        lines = content.splitlines()
+    except Exception:
+        lines = []
+
+    new_lines = []
+    found = False
+    
+    for line in lines:
+        if line.startswith(f"{key}="):
+            new_lines.append(f"{key}={value}")
+            found = True
+        else:
+            new_lines.append(line)
+    
+    if not found:
+        new_lines.append(f"{key}={value}")
+    
+    # Ensure newline at end if not empty, join with newlines
+    output = "\n".join(new_lines)
+    env_path.write_text(output)
+
+
+@app.get("/api/config")
+async def get_config():
+    """Get current system configuration."""
+    # Check for GCP credentials file
+    gcp_creds_path = Path("secrets/gcp_service_account.json")
+    has_gcp_creds = gcp_creds_path.exists()
+
+    return {
+        # AI Config
+        "ai_provider": os.getenv("AI_PROVIDER", "openai"),
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
+        "gemini_model": os.getenv("GEMINI_MODEL", "gemini-1.5-pro-latest"),
+        "claude_model": os.getenv("CLAUDE_MODEL", "claude-3-opus-20240229"),
+        "has_openai_key": bool(os.getenv("OPENAI_API_KEY")),
+        "has_gemini_key": bool(os.getenv("GEMINI_API_KEY")),
+        "has_claude_key": bool(os.getenv("ANTHROPIC_API_KEY")),
+        
+        # Upwork Config
+        "has_upwork_client_id": bool(os.getenv("UPWORK_CLIENT_ID")),
+        "has_upwork_secret": bool(os.getenv("UPWORK_CLIENT_SECRET")),
+        "has_upwork_token": bool(os.getenv("UPWORK_ACCESS_TOKEN")),
+        
+        # Google Sheets Config
+        "google_sheet_id": os.getenv("GOOGLE_SHEET_ID", ""),
+        "has_google_creds": has_gcp_creds
+    }
+
+@app.post("/api/config")
+async def update_config(config: ConfigUpdate):
+    """Update system configuration."""
+    global ai_analyzer
+    
+    # 1. AI Configuration
+    if config.ai_provider:
+        os.environ["AI_PROVIDER"] = config.ai_provider
+        update_env_file("AI_PROVIDER", config.ai_provider)
+    
+    # Update AI API Key
+    if config.api_key and config.ai_provider:
+        key_name = ""
+        if config.ai_provider == "openai":
+            key_name = "OPENAI_API_KEY"
+        elif config.ai_provider == "gemini":
+            key_name = "GEMINI_API_KEY"
+        elif config.ai_provider == "claude":
+            key_name = "ANTHROPIC_API_KEY"
+            
+        if key_name:
+            os.environ[key_name] = config.api_key
+            update_env_file(key_name, config.api_key)
+            
+    # Update AI Model
+    if config.model_name and config.ai_provider:
+        model_env_key = ""
+        if config.ai_provider == "openai":
+            model_env_key = "OPENAI_MODEL"
+        elif config.ai_provider == "gemini":
+            model_env_key = "GEMINI_MODEL"
+        elif config.ai_provider == "claude":
+            model_env_key = "CLAUDE_MODEL"
+            
+        if model_env_key:
+             os.environ[model_env_key] = config.model_name
+             update_env_file(model_env_key, config.model_name)
+
+    # 2. Upwork Configuration
+    if config.upwork_client_id:
+        os.environ["UPWORK_CLIENT_ID"] = config.upwork_client_id
+        update_env_file("UPWORK_CLIENT_ID", config.upwork_client_id)
+        
+    if config.upwork_client_secret:
+        os.environ["UPWORK_CLIENT_SECRET"] = config.upwork_client_secret
+        update_env_file("UPWORK_CLIENT_SECRET", config.upwork_client_secret)
+
+    if config.upwork_access_token:
+        os.environ["UPWORK_ACCESS_TOKEN"] = config.upwork_access_token
+        update_env_file("UPWORK_ACCESS_TOKEN", config.upwork_access_token)
+
+    # 3. Google Sheets Configuration
+    if config.google_sheet_id:
+        os.environ["GOOGLE_SHEET_ID"] = config.google_sheet_id
+        update_env_file("GOOGLE_SHEET_ID", config.google_sheet_id)
+        
+    if config.google_sheets_creds_json:
+        try:
+            secrets_dir = Path("secrets")
+            secrets_dir.mkdir(exist_ok=True)
+            creds_path = secrets_dir / "gcp_service_account.json"
+            creds_path.write_text(config.google_sheets_creds_json)
+        except Exception as e:
+            logger.error(f"Failed to save GCP credentials: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save Google Credentials")
+
+    # Re-initialize AI Analyzer if AI settings changed
+    if config.ai_provider or config.api_key or config.model_name:
+        try:
+            from src.ai_providers.ai_analyzer_factory import create_ai_analyzer
+            new_analyzer = create_ai_analyzer()
+            if new_analyzer:
+                ai_analyzer = new_analyzer
+                logger.info(f"AI Analyzer re-initialized with provider: {config.ai_provider}")
+                return {"status": "success", "message": "Configuration updated and AI re-initialized"}
+            else:
+                logger.error("Failed to re-initialize AI analyzer")
+                # Don't fail the whole request if just AI failed, since we might have updated Upwork keys
+                return {"status": "warning", "message": "Settings saved, but AI initialization failed. Check API key."}
+        except Exception as e:
+            logger.error(f"Error re-initializing AI analyzer: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    return {"status": "success", "message": "Configuration saved"}
+
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
@@ -145,6 +415,25 @@ async def get_job(job_id: str):
     return job
 
 
+@app.put("/api/jobs/{job_id}", response_model=JobResponse)
+async def update_job(job_id: str, job: JobCreate):
+    """
+    Update a job and its criteria.
+    Use this when editing auto-generated criteria.
+    """
+    updated_job = data_manager.update_job(job_id, job)
+    if not updated_job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    await ws_manager.broadcast_activity(
+        "job_updated",
+        f"Updated job: {updated_job.title}",
+        {"job_id": job_id}
+    )
+    
+    return updated_job
+
+
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str):
     """Delete a job and all its proposals."""
@@ -159,6 +448,25 @@ async def delete_job(job_id: str):
     await ws_manager.broadcast_stats(data_manager.get_stats())
     
     return {"message": "Job deleted successfully"}
+
+
+@app.post("/api/jobs/generate-criteria", response_model=JobCriteriaModel)
+async def generate_job_criteria(request: GenerateCriteriaRequest):
+    """
+    Generate hiring criteria from a job description using AI.
+    """
+    if not ai_analyzer:
+        raise HTTPException(
+            status_code=503,
+            detail="AI analyzer not available. Please configure AI_PROVIDER in .env"
+        )
+    
+    try:
+        criteria_dict = ai_analyzer.generate_criteria(request.description)
+        return JobCriteriaModel(**criteria_dict)
+    except Exception as e:
+        logger.error(f"Error generating criteria: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
@@ -223,6 +531,20 @@ async def delete_proposal(proposal_id: str):
     await ws_manager.broadcast_stats(data_manager.get_stats())
     
     return {"message": "Proposal deleted successfully"}
+
+
+@app.patch("/api/proposals/{proposal_id}/status")
+async def update_proposal_status(proposal_id: str, status_data: dict):
+    """Update proposal status (manual override)."""
+    success = data_manager.update_proposal_status(proposal_id, status_data.get("status"))
+    if not success:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+        
+    await ws_manager.broadcast_activity(
+        "status_updated",
+        f"Updated proposal {proposal_id} status to {status_data.get('status')}"
+    )
+    return {"message": "Status updated"}
 
 
 # ============================================================================
@@ -318,12 +640,15 @@ async def analyze_proposal(proposal_id: str):
 
 
 @app.post("/api/analyze/job/{job_id}")
-async def analyze_job_proposals(job_id: str):
-    """Analyze all proposals for a job."""
+async def analyze_job_proposals(job_id: str, force: bool = False):
+    """
+    Analyze all proposals for a job.
+    Set force=True to re-analyze proposals that already have scores.
+    """
     if not ai_analyzer:
         raise HTTPException(
             status_code=503,
-            detail="AI analyzer not available. Please set ANTHROPIC_API_KEY"
+            detail="AI analyzer not available. Please set AI_PROVIDER and appropriate API key in your .env file."
         )
     
     job = data_manager.get_job(job_id)
@@ -334,26 +659,32 @@ async def analyze_job_proposals(job_id: str):
     if not proposals:
         return {"message": "No proposals to analyze", "analyzed": 0}
     
-    # Filter to unanalyzed proposals
-    unanalyzed = [p for p in proposals if p.ai_score is None]
-    if not unanalyzed:
+    # Filter proposals
+    if force:
+        to_analyze = proposals
+    else:
+        to_analyze = [p for p in proposals if p.ai_score is None]
+        
+    if not to_analyze:
         return {"message": "All proposals already analyzed", "analyzed": 0}
     
     try:
-        await ws_manager.broadcast_progress("analysis", 0.0, f"Starting analysis of {len(unanalyzed)} proposals")
+        await ws_manager.broadcast_progress("analysis", 0.0, f"Starting analysis of {len(to_analyze)} proposals")
         
         results = []
-        for i, proposal in enumerate(unanalyzed):
+        for i, proposal in enumerate(to_analyze):
             # Analyze
+            # Note: analyze_proposal is an async endpoint function. 
+            # Calling it directly avoids HTTP overhead but keeps logic in one place.
             analysis_result = await analyze_proposal(proposal.proposal_id)
             results.append(analysis_result)
             
             # Update progress
-            progress = (i + 1) / len(unanalyzed)
+            progress = (i + 1) / len(to_analyze)
             await ws_manager.broadcast_progress(
                 "analysis",
                 progress,
-                f"Analyzed {i + 1}/{len(unanalyzed)} proposals"
+                f"Analyzed {i + 1}/{len(to_analyze)} proposals"
             )
         
         return {
@@ -361,7 +692,6 @@ async def analyze_job_proposals(job_id: str):
             "analyzed": len(results),
             "results": results
         }
-        
     except Exception as e:
         logger.error(f"Error analyzing job proposals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -509,8 +839,11 @@ async def websocket_endpoint(websocket: WebSocket):
 # Static Files (Frontend)
 # ============================================================================
 
-# Mount static files
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+# Mount static files if directory exists
+if os.path.exists("frontend"):
+    app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+else:
+    logger.warning("Frontend directory not found. Static files will not be served.")
 
 
 # ============================================================================
@@ -521,9 +854,14 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 async def startup_event():
     """Log startup message and seed initial data."""
     # Initialize database tables
-    logger.info("Initializing database...")
-    init_db()
-    logger.info("Database initialized successfully")
+    try:
+        logger.info("Initializing database...")
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        # We don't raise here to allow the container to start and be debuggable
+        # In production, you might want to fail hard if DB is critical
     
     logger.info("UpworkRecruitmentAgent Web UI Server Started")
     logger.info("Dashboard available at http://localhost:8000")
@@ -543,4 +881,5 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

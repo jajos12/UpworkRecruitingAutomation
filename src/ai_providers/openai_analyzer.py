@@ -103,6 +103,59 @@ class OpenAIAnalyzer(BaseAIAnalyzer):
         except Exception as e:
             logger.error(f"OpenAI evaluation failed: {e}")
             raise
+
+    def generate_criteria(self, job_description: str) -> Dict[str, Any]:
+        """Generate criteria using OpenAI."""
+        logger.info("Generating criteria from job description...")
+        
+        prompt = f"""
+        You are an expert technical recruiter. Analyze the following job description and extract key hiring criteria.
+        
+        JOB DESCRIPTION:
+        {job_description}
+        
+        Return a JSON object with this exact structure:
+        {{
+            "must_have": ["list of 3-7 absolute hard requirements"],
+            "nice_to_have": [
+                {{"text": "requirement description", "weight": "High/Medium/Low"}}
+            ],
+            "red_flags": ["list of 3-5 warning signs or negative indicators mentioned or implied"]
+        }}
+        """
+        
+        try:
+            params = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system", 
+                        "content": "You are a helpful assistant that extracts structured data from text."
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ],
+                "response_format": {"type": "json_object"}
+            }
+
+            # Handle reasoning/o1 models logic if present
+            if self.model.startswith(('o1', 'o3')):
+                params["messages"].pop(0) # Remove system prompt
+            
+            response = self.client.chat.completions.create(**params)
+            
+            result_text = response.choices[0].message.content
+            return json.loads(result_text)
+            
+        except Exception as e:
+            logger.error(f"OpenAI criteria generation failed: {e}")
+            return {
+                "must_have": [],
+                "nice_to_have": [],
+                "red_flags": []
+            }
     
     def evaluate_batch(
         self,

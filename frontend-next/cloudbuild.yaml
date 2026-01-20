@@ -1,0 +1,11 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: 
+  - 'build'
+  - '--build-arg'
+  - 'NEXT_PUBLIC_API_URL=${_API_URL}'
+  - '-t'
+  - 'gcr.io/neomeet-462422/upwork-agent-frontend'
+  - '.'
+images:
+- 'gcr.io/neomeet-462422/upwork-agent-frontend'

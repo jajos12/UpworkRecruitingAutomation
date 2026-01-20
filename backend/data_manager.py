@@ -78,6 +78,25 @@ class DataManager:
             return [self._job_model_to_response(j) for j in jobs]
         finally:
             db.close()
+            
+    def update_job(self, job_id: str, job_data: JobCreate) -> Optional[JobResponse]:
+        """Update an existing job."""
+        db = self._get_db()
+        try:
+            job_model = db.query(JobModel).filter(JobModel.job_id == job_id).first()
+            if not job_model:
+                return None
+            
+            job_model.title = job_data.title
+            job_model.description = job_data.description
+            if job_data.criteria:
+                job_model.criteria = job_data.criteria.model_dump()
+            
+            db.commit()
+            db.refresh(job_model)
+            return self._job_model_to_response(job_model)
+        finally:
+            db.close()
     
     def update_job_counts(self, job_id: str):
         """Update proposal counts for a job."""
@@ -204,6 +223,25 @@ class DataManager:
             
             # Update job counts
             self.update_job_counts(proposal_model.job_id)
+        finally:
+            db.close()
+
+    def update_proposal_status(self, proposal_id: str, status: str) -> bool:
+        """Update proposal status manual override."""
+        db = self._get_db()
+        try:
+            proposal_model = db.query(ProposalModel).filter(
+                ProposalModel.proposal_id == proposal_id
+            ).first()
+            
+            if not proposal_model:
+                return False
+            
+            proposal_model.status = status
+            db.commit()
+            
+            self.update_job_counts(proposal_model.job_id)
+            return True
         finally:
             db.close()
     
