@@ -5,7 +5,7 @@ An AI-powered automation tool designed to transform the Upwork hiring process. T
 <div align="center">
     <img src="docs/images/dashboard.png" alt="Dashboard Overview" width="100%">
     <p><em>Real-time Dashboard Preview</em></p>
-<div>
+</div>
 ## 🚀 Features
 
 - **Automated Data Extraction**: Pulls jobs, proposals, and freelancer profiles directly from Upwork using their API.
