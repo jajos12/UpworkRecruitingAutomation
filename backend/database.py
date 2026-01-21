@@ -53,6 +53,37 @@ def get_db():
 
 
 def init_db():
-    """Initialize database tables."""
+    """Initialize database tables and perform auto-migration."""
     from backend.database_models import Job, Proposal  # Import models
     Base.metadata.create_all(bind=engine)
+    
+    # Simple migration logic for Deep Vet features
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        
+        # Check proposals table columns
+        if inspector.has_table("proposals"):
+            columns = [c['name'] for c in inspector.get_columns('proposals')]
+            
+            with engine.connect() as conn:
+                # Add interview_questions if missing
+                if 'interview_questions' not in columns:
+                    # Determine column type syntax based on dialect
+                    col_type = "JSON"
+                    if engine.dialect.name == 'sqlite':
+                        col_type = "JSON" # SQLite supports JSON affinity in recent versions or just text
+                    
+                    conn.execute(text(f"ALTER TABLE proposals ADD COLUMN interview_questions {col_type}"))
+                    conn.commit()
+                    print("Migrated: Added interview_questions column")
+
+                # Add chat_history if missing
+                if 'chat_history' not in columns:
+                    col_type = "JSON"
+                    conn.execute(text(f"ALTER TABLE proposals ADD COLUMN chat_history {col_type}"))
+                    conn.commit()
+                    print("Migrated: Added chat_history column")
+                    
+    except Exception as e:
+        print(f"Migration warning: {e}")

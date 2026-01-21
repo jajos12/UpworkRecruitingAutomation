@@ -13,4 +13,4 @@ images:
 - 'gcr.io/neomeet-462422/upwork-agent-frontend'
 substitutions:
   _API_URL: 'https://upwork-agent-backend-ewt7fsp6aa-uc.a.run.app'
-  _WEBSOCKET_URL: 'wss://upwork-agent-backend-ewt7fsp6aa-uc.a.run.app'
+  _WEBSOCKET_URL: 'wss://upwork-agent-backend-ewt7fsp6aa-uc.a.run.app/ws'
