@@ -15,12 +15,35 @@ An AI-powered automation tool designed to transform the Upwork hiring process. T
     - **CLI**: Robust command-line tool for background execution and daemon mode.
     - **Web Dashboard**: Modern frontend to view jobs, proposals, and AI analysis results in real-time.
 
+## ✨ Interface Preview
+
+<div align="center">
+  <img src="docs/images/dashboard-overview.png" alt="Dashboard Overview" width="100%">
+  <p><em>Real-time Dashboard Monitoring Active Jobs</em></p>
+</div>
+
+
+<div align="center">
+  <img src="docs/images/candidate-analysis.png" alt="Candidate Analysis" width="100%">
+  <p><em>Global Candidate Registry with AI Scores and Deep Dive AI Analysis of Candidates</em></p>
+</div>
+
+<div align="center">
+  <img src="docs/images/interview-guide.png" alt="Candidate Registry" width="100%">
+  <p><em>Interview Question generator for a specific candidate</em></p>
+</div>
+
+<div align="center">
+  <img src="docs/images/investigator-mode.png" alt="Investigator Mode" width="100%">
+  <p><em>Interactive Investigator Mode for Deep Vetting</em></p>
+</div>
+
 ## 🛠️ Tech Stack
 
 - **Backend**: Python 3.10+, FastAPI, SQLAlchemy, Pydantic.
 - **AI**: Anthropic (Claude), OpenAI (GPT-4), Google (Gemini) integration.
-- **Frontend**: HTML5, CSS3, JavaScript (Vanilla).
-- **Database**: SQLite (via SQLAlchemy).
+- **Frontend**: Next.js, Tailwind CSS, TypeScript.
+- **Database**: SQLite (via SQLAlchemy) or PostgreSQL (Supabase).
 - **Process Management**: Tenacity (retries), APScheduler (if used internally), Python-multipart.
 
 ## 📋 Prerequisites
