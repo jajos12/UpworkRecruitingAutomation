@@ -3,7 +3,7 @@
 An AI-powered automation tool designed to transform the Upwork hiring process. This agent handles the heavy lifting of recruiting by extracting applicant data, analyzing proposals with LLMs, and automating communication, surfacing only the most qualified candidates who strictly meet your criteria.
   
 <div align="center">
-    <img src="docs/images/dashboard-overview.png" alt="Dashboard Overview" width="100%">
+    <img src="docs/images/dashboard.png" alt="Dashboard Overview" width="100%">
     <p><em>Real-time Dashboard Preview</em></p>
 <div>
 ## 🚀 Features
