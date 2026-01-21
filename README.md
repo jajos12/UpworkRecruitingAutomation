@@ -1,7 +1,10 @@
 # Upwork Recruitment Agent (UpworkHireBot)
 
 An AI-powered automation tool designed to transform the Upwork hiring process. This agent handles the heavy lifting of recruiting by extracting applicant data, analyzing proposals with LLMs, and automating communication, surfacing only the most qualified candidates who strictly meet your criteria.
-
+  
+<div align="center">
+    <img src="docs/images/dashboard-overview.png" alt="Dashboard Overview" width="100%">
+<div>
 ## 🚀 Features
 
 - **Automated Data Extraction**: Pulls jobs, proposals, and freelancer profiles directly from Upwork using their API.
@@ -16,12 +19,6 @@ An AI-powered automation tool designed to transform the Upwork hiring process. T
     - **Web Dashboard**: Modern frontend to view jobs, proposals, and AI analysis results in real-time.
 
 ## ✨ Interface Preview
-
-<div align="center">
-  <img src="docs/images/dashboard-overview.png" alt="Dashboard Overview" width="100%">
-  <p><em>Real-time Dashboard Monitoring Active Jobs</em></p>
-</div>
-
 
 <div align="center">
   <img src="docs/images/candidate-analysis.png" alt="Candidate Analysis" width="100%">
