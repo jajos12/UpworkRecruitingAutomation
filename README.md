@@ -4,6 +4,7 @@ An AI-powered automation tool designed to transform the Upwork hiring process. T
   
 <div align="center">
     <img src="docs/images/dashboard-overview.png" alt="Dashboard Overview" width="100%">
+    <p><em>Real-time Dashboard Preview</em></p>
 <div>
 ## 🚀 Features
 
