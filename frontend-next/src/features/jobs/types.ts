@@ -50,4 +50,33 @@ export interface Proposal {
   ai_reasoning?: string;
   status: 'pending' | 'tier1' | 'tier2' | 'tier3' | 'rejected' | 'approved';
   created_at: string;
+  interview_questions?: InterviewQuestion[];
+  chat_history?: ChatMessage[];
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+}
+
+export interface ProposalCreate {
+  job_id: string;
+  freelancer: FreelancerProfile;
+  cover_letter: string;
+  bid_amount: number;
+  estimated_duration?: string;
+  screening_answers?: string;
+}
+
+export interface InterviewQuestion {
+  type: string;
+  question: string;
+  context?: string;
+  expected_answer?: string;
+}
+
+export interface InterviewGuide {
+  proposal_id: string;
+  questions: InterviewQuestion[];
 }

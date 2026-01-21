@@ -4,12 +4,18 @@ import { useState } from 'react';
 import { JobWizard } from "@/features/jobs/components/JobWizard";
 import { JobList } from "@/features/jobs/components/JobList";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutDashboard, Activity } from "lucide-react";
+import { Plus, LayoutDashboard, Activity, Play, Loader2 } from "lucide-react";
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { useMutation } from '@tanstack/react-query';
+import { runPipeline } from '@/features/settings/api';
 
 export default function DashboardPage() {
   const [view, setView] = useState<'dashboard' | 'create'>('dashboard');
   const { lastMessage, status } = useWebSocket();
+
+  const pipeline = useMutation({
+    mutationFn: () => runPipeline({ fetch: true, analyze: true, communicate: true, dry_run: false })
+  });
 
   if (view === 'create') {
     return (
@@ -41,13 +47,27 @@ export default function DashboardPage() {
             </span>
           </p>
         </div>
-        <Button 
-          onClick={() => setView('create')} 
-          className="bg-white text-black hover:bg-zinc-200"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Initialize New Job Node
-        </Button>
+        <div className="flex gap-2">
+            <Button
+                onClick={() => pipeline.mutate()}
+                disabled={pipeline.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+                {pipeline.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                    <Play className="w-4 h-4 mr-2" />
+                )}
+                {pipeline.isPending ? 'Running...' : 'Run Pipeline'}
+            </Button>
+            <Button 
+              onClick={() => setView('create')} 
+              className="bg-white text-black hover:bg-zinc-200"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Initialize New Job
+            </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

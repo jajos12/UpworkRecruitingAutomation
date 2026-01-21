@@ -241,3 +241,110 @@ Return your evaluation as JSON with this exact structure:
             logger.error(f"Failed to parse Gemini response: {e}")
             logger.debug(f"Response text: {response_text}")
             raise
+
+    def evaluate_batch(
+        self,
+        applicants: List[Dict[str, Any]],
+        criteria: Any,
+        job_description: str
+    ) -> List[Dict[str, Any]]:
+        """Evaluate multiple applicants."""
+        # Simple loop implementation
+        return [self.evaluate_applicant(app, criteria, job_description) for app in applicants]
+
+    def generate_criteria(self, job_description: str) -> Dict[str, Any]:
+        """Generate criteria prompt for Gemini."""
+        prompt = f"""
+        Extract hiring criteria from this job description:
+        {job_description[:1000]}...
+        
+        Return JSON format: {{ "must_have": [], "nice_to_have": [], "red_flags": [] }}
+        """
+        try:
+            response = self.model.generate_content(prompt)
+            # Simple cleanup, Gemini often adds markdown blocks
+            text = response.text.replace('```json', '').replace('```', '')
+            
+            start = text.find('{') 
+            end = text.rfind('}') + 1
+            return json.loads(text[start:end]) if start >= 0 else {}
+        except Exception:
+            return {}
+
+    def generate_interview_questions(
+        self,
+        applicant_data: Dict[str, Any],
+        job_description: str,
+        config: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
+        """Generate interview questions using Gemini."""
+        
+        # Default config
+        config = config or {}
+        b_count = config.get("behavioral_count", 2)
+        t_count = config.get("technical_count", 2)
+        r_count = config.get("red_flag_count", 1)
+
+        prompt = f"""
+        You are an expert technical interviewer.
+        
+        JOB: {job_description[:500]}
+        CANDIDATE: {applicant_data.get('applicant_name')}
+        SKILLS: {applicant_data.get('skills')}
+        BIO: {applicant_data.get('bio')}
+        
+        Create tailored interview questions:
+        - {b_count} Behavioral
+        - {t_count} Technical
+        - {r_count} Red Flag/Gap Analysis
+        
+        Return purely a JSON array of objects with keys: type, question, context, expected_answer.
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            text = response.text.replace('```json', '').replace('```', '')
+            
+            start = text.find('[')
+            end = text.rfind(']') + 1
+            
+            if start >= 0 and end > start:
+                return json.loads(text[start:end])
+            return []
+            
+        except Exception as e:
+            logger.error(f"Gemini error generating questions: {e}")
+            return []
+
+    def chat_with_candidate(
+        self,
+        query: str,
+        applicant_data: Dict[str, Any],
+        job_description: str,
+        chat_history: List[Dict[str, Any]]
+    ) -> str:
+        """Chat with candidate using Gemini."""
+        
+        prompt = f"""
+        (System: You are a recruiter assistant answering questions about a candidate.)
+        
+        CANDIDATE PROFILE:
+        Name: {applicant_data.get('applicant_name')}
+        Bio: {applicant_data.get('bio')}
+        Skills: {applicant_data.get('skills')}
+        
+        CHAT HISTORY:
+        {json.dumps(chat_history[-5:])}
+        
+        USER QUESTION: {query}
+        
+        ANSWER:
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            logger.error(f"Gemini chat error: {e}")
+            return "Error processing your question with Gemini."
+

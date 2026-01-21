@@ -74,6 +74,46 @@ class BaseAIAnalyzer(ABC):
         """
         pass
     
+    @abstractmethod
+    def generate_interview_questions(
+        self,
+        applicant_data: Dict[str, Any],
+        job_description: str,
+        config: Dict[str, Any] = None 
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate specific interview questions for a candidate.
+        
+        Args:
+            applicant_data: Dictionary containing applicant information
+            job_description: Full job description text
+            config: Optional configuration (counts of different question types)
+            
+        Returns:
+            List of dictionaries forming the interview guide.
+        """
+        pass
+    @abstractmethod
+    def chat_with_candidate(
+        self,
+        query: str,
+        applicant_data: Dict[str, Any],
+        job_description: str,
+        chat_history: List[Dict[str, Any]]
+    ) -> str:
+        """
+        Chat with the candidate's profile (The Investigator).
+        
+        Args:
+            query: The user's question
+            applicant_data: The candidate's profile data
+            job_description: The job description
+            chat_history: Previous messages [ {"role": "user", "content": "..."}, ... ]
+            
+        Returns:
+            The AI's response string
+        """
+        pass
     def _determine_tier(self, score: int) -> int:
         """
         Determine tier based on score.

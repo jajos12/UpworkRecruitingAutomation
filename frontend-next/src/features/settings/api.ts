@@ -42,3 +42,15 @@ export const updateConfig = async (payload: ConfigUpdatePayload): Promise<{ stat
   const { data } = await axios.post('/api/config', payload);
   return data;
 };
+
+export interface PipelineRunRequest {
+  fetch: boolean;
+  analyze: boolean;
+  communicate: boolean;
+  dry_run: boolean;
+}
+
+export const runPipeline = async (payload: PipelineRunRequest): Promise<{ status: string; message: string }> => {
+  const { data } = await axios.post('/api/pipeline/run', payload);
+  return data;
+};

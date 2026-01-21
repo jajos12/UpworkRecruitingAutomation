@@ -111,6 +111,10 @@ def create_ai_analyzer(
                 model = os.getenv('AI_MODEL', 'gemini-pro')
             
             return GeminiAnalyzer(api_key=api_key, model=model)
+            
+        elif provider == 'mock':
+            from src.ai_providers.mock_analyzer import MockAIAnalyzer
+            return MockAIAnalyzer()
         
         else:
             logger.error(f"Unknown AI provider: {provider}")

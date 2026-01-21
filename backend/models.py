@@ -90,7 +90,8 @@ class ProposalResponse(BaseModel):
     ai_reasoning: Optional[str] = None
     status: str = "pending"  # pending, tier1, tier2, tier3
     created_at: datetime
-
+    interview_questions: Optional[List['InterviewQuestion']] = None
+    chat_history: Optional[List['ChatMessage']] = None
 
 # ============================================================================
 # Analysis Models
@@ -105,6 +106,36 @@ class AnalysisResult(BaseModel):
     recommendation: str  # ADVANCE, REVIEW, REJECT
     red_flags: List[str] = Field(default_factory=list)
     strengths: List[str] = Field(default_factory=list)
+
+class InterviewGenerationConfig(BaseModel):
+    """Configuration for generating interview questions."""
+    behavioral_count: int = Field(1, ge=0, le=5, description="Number of behavioral questions")
+    technical_count: int = Field(2, ge=0, le=10, description="Number of technical questions")
+    red_flag_count: int = Field(1, ge=0, le=5, description="Number of red flag/gap questions")
+    soft_skill_count: int = Field(1, ge=0, le=5, description="Number of soft skill/cultural questions")
+    custom_focus: Optional[str] = Field(None, description="Specific topic to focus on")
+
+class InterviewQuestion(BaseModel):
+    """Generated interview question."""
+    type: str  # Behavioral, Technical, Red Flag, Soft Skill
+    question: str
+    context: Optional[str] = None # Why ask this? / What to look for
+    expected_answer: Optional[str] = None # Technical only
+
+class InterviewGuide(BaseModel):
+    """Full interview guide."""
+    proposal_id: str
+    questions: List[InterviewQuestion]
+
+class ChatMessage(BaseModel):
+    """Chat message for 'Chat with Resume'."""
+    role: str # user, assistant, system
+    content: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class ChatRequest(BaseModel):
+    """Request query."""
+    message: str
 
 
 # ============================================================================

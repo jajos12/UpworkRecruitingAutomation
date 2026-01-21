@@ -264,6 +264,54 @@ class DataManager:
             return True
         finally:
             db.close()
+
+    def update_proposal_interview_questions(self, proposal_id: str, questions: list) -> bool:
+        """Update interview questions for a proposal."""
+        db = self._get_db()
+        try:
+            proposal_model = db.query(ProposalModel).filter(
+                ProposalModel.proposal_id == proposal_id
+            ).first()
+            if not proposal_model:
+                return False
+            
+            # Convert Pydantic models to dicts if necessary
+            questions_data = []
+            for q in questions:
+                if hasattr(q, "dict"):
+                    questions_data.append(q.dict())
+                else:
+                    questions_data.append(q)
+
+            proposal_model.interview_questions = questions_data
+            db.commit()
+            return True
+        finally:
+            db.close()
+
+    def update_proposal_chat_history(self, proposal_id: str, chat_history: list) -> bool:
+        """Update chat history for a proposal."""
+        db = self._get_db()
+        try:
+            proposal_model = db.query(ProposalModel).filter(
+                ProposalModel.proposal_id == proposal_id
+            ).first()
+            if not proposal_model:
+                return False
+            
+            # Serialize if needed
+            history_data = []
+            for msg in chat_history:
+                if hasattr(msg, "dict"):
+                    history_data.append(msg.dict())
+                else:
+                    history_data.append(msg)
+            
+            proposal_model.chat_history = history_data
+            db.commit()
+            return True
+        finally:
+            db.close()
     
     # ========================================================================
     # Statistics
@@ -340,5 +388,7 @@ class DataManager:
             ai_tier=proposal_model.ai_tier,
             ai_reasoning=proposal_model.ai_reasoning,
             status=proposal_model.status,
-            created_at=proposal_model.created_at
+            created_at=proposal_model.created_at,
+            interview_questions=proposal_model.interview_questions,
+            chat_history=proposal_model.chat_history
         )

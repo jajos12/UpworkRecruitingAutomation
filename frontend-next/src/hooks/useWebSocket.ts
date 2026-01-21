@@ -8,7 +8,9 @@ interface WebSocketMessage {
   timestamp: string;
 }
 
-export function useWebSocket(url: string = 'ws://localhost:8000/ws') {
+const URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:8000/ws';
+
+export function useWebSocket(url: string = URL) {
   const [status, setStatus] = useState<WebSocketStatus>('disconnected');
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const [history, setHistory] = useState<WebSocketMessage[]>([]);

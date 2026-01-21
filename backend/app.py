@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.encoders import jsonable_encoder
 from typing import List, Optional
 import asyncio
 import os
@@ -27,7 +28,9 @@ load_dotenv()
 from backend.models import (
     JobCreate, JobResponse, ProposalCreate, ProposalResponse,
     PipelineRunRequest, PipelineStatus, DaemonStatus, AnalysisResult,
-    GenerateCriteriaRequest, JobCriteriaModel, ConfigUpdate
+    GenerateCriteriaRequest, JobCriteriaModel, ConfigUpdate,
+    InterviewGuide, InterviewQuestion, InterviewGenerationConfig,
+    ChatRequest, ChatMessage
 )
 from backend.data_manager import DataManager
 from backend.websocket_manager import ws_manager
@@ -43,7 +46,7 @@ from src.utils.config_loader import (
 )
 from src.ai_analyzer import AIAnalyzer
 from src.pipeline import Pipeline
-from src.upwork_client import UpworkClient
+from src.upwork_client import UpworkClient, MockUpworkClient
 from src.sheets_manager import SheetsManager
 from src.communicator import Communicator
 
@@ -76,7 +79,13 @@ data_manager = DataManager()
 try:
     from src.ai_providers.ai_analyzer_factory import create_ai_analyzer, get_available_providers
     
-    ai_analyzer = create_ai_analyzer()
+    # Check for MOCK_MODE override for AI
+    provider_override = None
+    if os.getenv("MOCK_MODE", "false").lower() == "true":
+        provider_override = "mock"
+        logger.info("[INFO] MOCK_MODE enabled, using Mock AI Analyzer")
+    
+    ai_analyzer = create_ai_analyzer(provider=provider_override)
     
     if ai_analyzer:
         logger.info("[SUCCESS] AI Analyzer initialized")
@@ -145,7 +154,12 @@ def run_pipeline_task(request: PipelineRunRequest):
         
         # Upwork
         try:
-             upwork_client = UpworkClient(upwork_conf)
+             mock_mode = os.getenv("MOCK_MODE", "false").lower() == "true"
+             if mock_mode:
+                 upwork_client = MockUpworkClient(upwork_conf)
+                 logger.warning("USING MOCK UPWORK CLIENT")
+             else:
+                 upwork_client = UpworkClient(upwork_conf)
         except Exception as e:
              logger.error(f"Failed to init UpworkClient: {e}")
              if request.fetch:
@@ -253,6 +267,163 @@ def update_env_file(key: str, value: str):
     # Ensure newline at end if not empty, join with newlines
     output = "\n".join(new_lines)
     env_path.write_text(output)
+
+
+@app.post("/api/analyze/interview/{proposal_id}", response_model=InterviewGuide)
+async def generate_interview_guide(proposal_id: str, config: Optional[InterviewGenerationConfig] = None):
+    """Generate an interview guide for a candidate."""
+    if not ai_analyzer:
+        raise HTTPException(
+            status_code=503,
+            detail="AI analyzer not available. Please configuration AI provider."
+        )
+    
+    proposal = data_manager.get_proposal(proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    # Check for existing questions if no new config meant to regenerate
+    if not config and proposal.interview_questions:
+        return InterviewGuide(proposal_id=proposal_id, questions=proposal.interview_questions)
+        
+    job = data_manager.get_job(proposal.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Get data
+    applicant_data = {
+        "applicant_id": proposal.freelancer.freelancer_id,
+        "applicant_name": proposal.freelancer.name,
+        "profile_title": proposal.freelancer.title,
+        "hourly_rate_profile": proposal.freelancer.hourly_rate,
+        "skills": proposal.freelancer.skills,
+        "bio": proposal.freelancer.bio,
+        "certifications": proposal.freelancer.certifications,
+        "portfolio_items": proposal.freelancer.portfolio_items,
+        "work_history_summary": proposal.freelancer.work_history_summary,
+        "cover_letter": proposal.cover_letter,
+        "applicant_profile": proposal.freelancer.dict()
+    }
+    
+    try:
+        # Generate questions
+        questions_raw = ai_analyzer.generate_interview_questions(
+            applicant_data, 
+            job.description, 
+            config=config.dict() if config else None
+        )
+        
+        # Convert to Pydantic models
+        questions = []
+        for q in questions_raw:
+            # Handle list answers (AI sometimes returns lists)
+            expected_answer = q.get("expected_answer")
+            if isinstance(expected_answer, list):
+                expected_answer = "; ".join(expected_answer)
+            elif expected_answer is not None:
+                expected_answer = str(expected_answer)
+
+            # Handle list contexts
+            context = q.get("context")
+            if isinstance(context, list):
+                context = "; ".join(context)
+            elif context is not None:
+                context = str(context)
+
+            questions.append(InterviewQuestion(
+                type=q.get("type", "General"),
+                question=q.get("question", ""),
+                context=context,
+                expected_answer=expected_answer
+            ))
+        
+        # Save to DB
+        data_manager.update_proposal_interview_questions(proposal_id, questions)
+            
+        return InterviewGuide(proposal_id=proposal_id, questions=questions)
+        
+    except Exception as e:
+        logger.error(f"Error generating interview guide: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/analyze/chat/{proposal_id}", response_model=ChatMessage)
+async def chat_with_candidate(proposal_id: str, request: ChatRequest):
+    """Chat with a candidate (The Investigator)."""
+    if not ai_analyzer:
+        raise HTTPException(
+            status_code=503,
+            detail="AI analyzer not available."
+        )
+    
+    proposal = data_manager.get_proposal(proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+        
+    job = data_manager.get_job(proposal.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Get data
+    applicant_data = {
+        "applicant_name": proposal.freelancer.name,
+        "profile_title": proposal.freelancer.title,
+        "skills": proposal.freelancer.skills,
+        "bio": proposal.freelancer.bio,
+        "cover_letter": proposal.cover_letter,
+        "work_history_summary": proposal.freelancer.work_history_summary,
+        "certifications": proposal.freelancer.certifications,
+        "portfolio_items": proposal.freelancer.portfolio_items
+    }
+    
+    # Get existing history
+    history = []
+    if hasattr(proposal, "chat_history") and proposal.chat_history:
+        history = proposal.chat_history # This should be List[ChatMessage] or List[Dict]
+
+    # Prepare context for AI (clean list of role/content)
+    ai_context = []
+    for h in history:
+        if isinstance(h, dict):
+            ai_context.append({"role": h.get("role"), "content": h.get("content")})
+        else:
+            ai_context.append({"role": h.role, "content": h.content})
+
+    try:
+        # Get AI Response
+        response_text = ai_analyzer.chat_with_candidate(
+            request.message,
+            applicant_data,
+            job.description,
+            ai_context
+        )
+        
+        # Create message objects
+        user_msg = ChatMessage(role="user", content=request.message, timestamp=datetime.utcnow())
+        ai_msg = ChatMessage(role="assistant", content=response_text, timestamp=datetime.utcnow())
+        
+        # Update history (Full history + new messages)
+        # We need to append to the original 'history' list but ensure uniform types
+        # 'history' might contain dicts (from DB direct access) or objects (from Pydantic)
+        
+        updated_history = []
+        # Add old messages
+        if history:
+            updated_history.extend(history)
+            
+        # Add new messages
+        updated_history.extend([user_msg, ai_msg])
+
+        # Serialize everything to JSON-compatible format (handling datetimes)
+        serialized_history = jsonable_encoder(updated_history)
+        
+        data_manager.update_proposal_chat_history(proposal_id, serialized_history)
+        
+        return ai_msg
+        
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/config")
@@ -639,22 +810,13 @@ async def analyze_proposal(proposal_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/analyze/job/{job_id}")
-async def analyze_job_proposals(job_id: str, force: bool = False):
+
+@app.post("/api/analyze/job/{job_id}", status_code=202)
+async def analyze_job_proposals(job_id: str, force: bool = False, background_tasks: BackgroundTasks = None):
     """
-    Analyze all proposals for a job.
+    Analyze all proposals for a job in the background.
     Set force=True to re-analyze proposals that already have scores.
     """
-    if not ai_analyzer:
-        raise HTTPException(
-            status_code=503,
-            detail="AI analyzer not available. Please set AI_PROVIDER and appropriate API key in your .env file."
-        )
-    
-    job = data_manager.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
     proposals = data_manager.get_proposals_for_job(job_id)
     if not proposals:
         return {"message": "No proposals to analyze", "analyzed": 0}
@@ -667,34 +829,44 @@ async def analyze_job_proposals(job_id: str, force: bool = False):
         
     if not to_analyze:
         return {"message": "All proposals already analyzed", "analyzed": 0}
-    
-    try:
-        await ws_manager.broadcast_progress("analysis", 0.0, f"Starting analysis of {len(to_analyze)} proposals")
+
+    # Define background task
+    async def _analyze_batch(proposals_to_process: List[ProposalResponse]):
+        if not ai_analyzer:
+             logger.error("AI analyzer not available for batch processing")
+             return
+
+        await ws_manager.broadcast_progress("analysis", 0.0, f"Starting analysis of {len(proposals_to_process)} proposals")
         
         results = []
-        for i, proposal in enumerate(to_analyze):
-            # Analyze
-            # Note: analyze_proposal is an async endpoint function. 
-            # Calling it directly avoids HTTP overhead but keeps logic in one place.
-            analysis_result = await analyze_proposal(proposal.proposal_id)
-            results.append(analysis_result)
+        for i, proposal in enumerate(proposals_to_process):
+            try:
+                # Use semaphore or rate limiter if needed inside ai_analyzer
+                analysis_result = await analyze_proposal(proposal.proposal_id)
+                results.append(analysis_result)
+            except Exception as e:
+                logger.error(f"Failed to analyze proposal {proposal.proposal_id}: {e}")
             
             # Update progress
-            progress = (i + 1) / len(to_analyze)
+            progress = (i + 1) / len(proposals_to_process)
             await ws_manager.broadcast_progress(
                 "analysis",
                 progress,
-                f"Analyzed {i + 1}/{len(to_analyze)} proposals"
+                f"Analyzed {i + 1}/{len(proposals_to_process)} proposals"
             )
+
+    # Add to background tasks
+    if background_tasks:
+        background_tasks.add_task(_analyze_batch, to_analyze)
+    else:
+         # Fallback if no background_tasks provided (shouldn't happen with FastAPI)
+         asyncio.create_task(_analyze_batch(to_analyze))
         
-        return {
-            "message": f"Analyzed {len(results)} proposals",
-            "analyzed": len(results),
-            "results": results
-        }
-    except Exception as e:
-        logger.error(f"Error analyzing job proposals: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "message": f"Analysis started for {len(to_analyze)} proposals",
+        "status": "processing",
+        "analyzed": len(to_analyze) # Expected count
+    }
 
 
 # ============================================================================

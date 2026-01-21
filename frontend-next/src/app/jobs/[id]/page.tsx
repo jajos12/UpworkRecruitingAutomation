@@ -2,12 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useJob, useJobProposals } from '@/features/jobs/hooks/useJobs';
+import { useJob, useJobProposals, useAnalyzeJob } from '@/features/jobs/hooks/useJobs';
 import { CandidateList } from '@/features/jobs/components/CandidateList';
 import { CandidateDetail } from '@/features/jobs/components/CandidateDetail';
+import { CandidateWizard } from '@/features/jobs/components/CandidateWizard';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, AlertCircle, Sparkles, Plus } from 'lucide-react';
 import { Proposal } from '@/features/jobs/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 export default function JobDetailsPage() {
   const params = useParams();
@@ -16,8 +22,10 @@ export default function JobDetailsPage() {
   
   const { data: job, isLoading: isLoadingJob } = useJob(jobId);
   const { data: proposals, isLoading: isLoadingProposals } = useJobProposals(jobId);
+  const analyzeJob = useAnalyzeJob();
   
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
+  const [isAddCandidateOpen, setIsAddCandidateOpen] = useState(false);
 
   // Auto-select first proposal on load
   useEffect(() => {
@@ -66,6 +74,31 @@ export default function JobDetailsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+           <Dialog open={isAddCandidateOpen} onOpenChange={setIsAddCandidateOpen}>
+             <DialogTrigger asChild>
+               <Button size="sm" variant="outline" className="h-8 text-xs font-mono">
+                 <Plus className="w-3 h-3 mr-2" /> Add Candidate
+               </Button>
+             </DialogTrigger>
+             <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-800 p-0 text-zinc-100">
+               <CandidateWizard 
+                 jobId={jobId} 
+                 onSuccess={() => setIsAddCandidateOpen(false)}
+                 onCancel={() => setIsAddCandidateOpen(false)}
+               />
+             </DialogContent>
+           </Dialog>
+
+           <Button 
+             size="sm" 
+             variant="outline" 
+             className="h-8 text-xs font-mono bg-emerald-950/30 border-emerald-900 text-emerald-400 hover:bg-emerald-950/50"
+             onClick={() => analyzeJob.mutate({ id: jobId, force: false })}
+             disabled={analyzeJob.isPending}
+           >
+             {analyzeJob.isPending ? <RefreshCw className="w-3 h-3 mr-2 animate-spin" /> : <Sparkles className="w-3 h-3 mr-2" />}
+             {analyzeJob.isPending ? 'Analyzing...' : 'Analyze Candidates'}
+           </Button>
            <Button size="sm" variant="outline" className="h-8 text-xs font-mono">
              <RefreshCw className="w-3 h-3 mr-2" /> Sync
            </Button>

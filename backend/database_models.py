@@ -49,6 +49,10 @@ class Proposal(Base):
     ai_red_flags = Column(JSON, nullable=True)  # List of strings
     ai_strengths = Column(JSON, nullable=True)  # List of strings
     
+    # Deep Vet Features
+    interview_questions = Column(JSON, nullable=True) # List[Dict] (Question, Context, Type)
+    chat_history = Column(JSON, nullable=True)        # List[Dict] (Role, Content) for "Chat with Resume"
+
     status = Column(String, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     

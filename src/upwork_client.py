@@ -492,3 +492,139 @@ class UpworkClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.close()
+
+
+# Mock Client Implementation
+import random
+try:
+    from backend.mock_data import JOB_TEMPLATES, FREELANCER_TEMPLATES
+except ImportError:
+    JOB_TEMPLATES = []
+    FREELANCER_TEMPLATES = []
+
+class MockUpworkClient(UpworkClient):
+    """Mock client for testing without API access."""
+    
+    def __init__(self, config: Optional[UpworkConfig] = None):
+        # We don't call super().__init__ to avoid httpx client usage
+        self.config = config
+        logger.info("MOCK Upwork API client initialized - Running in SIMULATION mode")
+
+    def execute_query(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Mock query execution."""
+        return {"data": {}}
+
+    def get_open_jobs(self) -> List[Dict[str, Any]]:
+        """Return mock jobs."""
+        logger.info("[MOCK] Fetching open jobs...")
+        jobs = []
+        for i, template in enumerate(JOB_TEMPLATES):
+            # Create a deterministic but unique-looking ID
+            job_id = f"mock-job-{i}-{abs(hash(template['title'])) % 10000}"
+            jobs.append({
+                "id": job_id,
+                "title": template['title'],
+                "description": template['description'],
+                "createdDateTime": datetime.now().isoformat()
+            })
+        
+        return jobs
+
+    def get_job_proposals(self, job_id: str) -> List[Dict[str, Any]]:
+        """Return mock proposals for a job."""
+        logger.info(f"[MOCK] Fetching proposals for job: {job_id}")
+        
+        proposals = []
+        # Generate 3-8 proposals per job, deterministically based on job_id
+        seed = 0
+        for char in job_id:
+            seed = (seed * 31 + ord(char)) & 0xFFFFFFFF
+            
+        random.seed(seed)
+        num_proposals = 3 + (seed % 5)
+        
+        for i in range(num_proposals):
+            # Pick a random freelancer template
+            freelancer = FREELANCER_TEMPLATES[i % len(FREELANCER_TEMPLATES)]
+            
+            proposal_id = f"mock-prop-{job_id}-{i}"
+            
+            # Format skills for proposal node
+            skills_node = [{"name": s} for s in freelancer["skills"]]
+            
+            proposal_node = {
+                "id": proposal_id,
+                "coverLetter": freelancer.get("cover_letter_template", "I am interested.").format(
+                    skill=freelancer["skills"][0] if freelancer["skills"] else "Python",
+                    number=str(random.randint(2,10)),
+                    previous_client_type="startups",
+                    specific_achievement="built a similar system",
+                    reason="it matches my skills",
+                    relevant_skill=freelancer["skills"][1] if len(freelancer["skills"]) > 1 else "coding",
+                    achievement="great results",
+                    project_goal="success"
+                ),
+                "chargedAmount": {
+                    "amount": freelancer["hourly_rate"],
+                    "currencyCode": "USD"
+                },
+                "proposedTerms": {
+                    "duration": "1 to 3 months"
+                },
+                "submittedDateTime": (datetime.now() - timedelta(hours=random.randint(1, 48))).isoformat(),
+                "freelancer": {
+                    "id": f"mock-fl-{abs(hash(freelancer['name']))}",
+                    "name": freelancer["name"],
+                    "title": freelancer["title"],
+                    "hourlyRate": {
+                        "amount": freelancer["hourly_rate"],
+                        "currencyCode": "USD"
+                    },
+                    "location": {
+                        "city": "Remote City H",
+                        "country": "United States",
+                        "timezone": "UTC-5"
+                    },
+                    "stats": {
+                        "jobSuccessScore": freelancer["job_success_score"],
+                        "totalEarnings": freelancer["total_earnings"],
+                        "totalJobsCount": int(freelancer["total_earnings"] / 500) if freelancer["total_earnings"] else 0
+                    },
+                    "topRatedStatus": freelancer.get("top_rated_status", None),
+                    "skills": skills_node,
+                    "workHistory": {
+                        "edges": [] 
+                    }
+                }
+            }
+            proposals.append(proposal_node)
+            
+        return proposals
+
+    def get_freelancer_profile(self, freelancer_id: str) -> Dict[str, Any]:
+        logger.info(f"[MOCK] Fetching profile for: {freelancer_id}")
+        # Just return the first template for now as fallback
+        f = FREELANCER_TEMPLATES[0]
+        return {
+            "id": freelancer_id,
+            "name": f["name"],
+            "title": f["title"],
+            "description": f["bio"],
+        }
+
+    def send_message(self, room_id: str, message: str) -> bool:
+        logger.info(f"[MOCK] Sending message to {room_id}: {message}")
+        return True
+
+    def search_freelancers(self, query: str, skills: Optional[List[str]] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        logger.info(f"[MOCK] Searching freelancers: {query}")
+        return [] # Implement later if needed
+        
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass

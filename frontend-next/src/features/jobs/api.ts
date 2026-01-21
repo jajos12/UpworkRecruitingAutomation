@@ -1,5 +1,5 @@
 import api from '@/lib/axios';
-import { Job, JobCreate, JobCriteria, GenerateCriteriaRequest, Proposal } from './types';
+import { Job, JobCreate, JobCriteria, GenerateCriteriaRequest, Proposal, ProposalCreate, ChatMessage } from './types';
 
 export const jobApi = {
   getJobs: async (): Promise<Job[]> => {
@@ -26,6 +26,11 @@ export const jobApi = {
     await api.patch(`/api/proposals/${proposalId}/status`, { status });
   },
 
+  createProposal: async (data: ProposalCreate): Promise<Proposal> => {
+    const response = await api.post('/api/proposals', data);
+    return response.data;
+  },
+
   createJob: async (data: JobCreate): Promise<Job> => {
     const response = await api.post('/api/jobs', data);
     return response.data;
@@ -48,5 +53,21 @@ export const jobApi = {
   analyzeJob: async (id: string, force = false): Promise<any> => {
     const response = await api.post(`/api/analyze/job/${id}${force ? '?force=true' : ''}`);
     return response.data;
+  },
+
+  analyzeProposal: async (id: string): Promise<any> => {
+    const response = await api.post(`/api/analyze/${id}`);
+    return response.data;
+  },
+
+  generateInterviewGuide: async (proposalId: string, config?: any): Promise<any> => {
+    const response = await api.post(`/api/analyze/interview/${proposalId}`, config);
+    return response.data;
+  },
+
+  chatWithCandidate: async (proposalId: string, message: string): Promise<ChatMessage> => {
+    const response = await api.post(`/api/analyze/chat/${proposalId}`, { message });
+    return response.data;
   }
 };
+

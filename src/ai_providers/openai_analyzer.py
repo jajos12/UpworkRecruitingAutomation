@@ -264,3 +264,204 @@ Return your evaluation as JSON with this exact structure:
 }}"""
         
         return prompt
+
+    def evaluate_batch(
+        self,
+        applicants: List[Dict[str, Any]],
+        criteria: Any,
+        job_description: str
+    ) -> List[Dict[str, Any]]:
+        """Evaluate multiple applicants using sequential processing."""
+        # Note: OpenAI supports batch API but for simplicity in this version we run sequentially
+        # In a production scaled version, we would implement async batching here
+        results = []
+        for applicant in applicants:
+            try:
+                result = self.evaluate_applicant(applicant, criteria, job_description)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Error evaluating applicant in batch: {e}")
+                results.append({"error": str(e)})
+        return results
+
+    def generate_criteria(self, job_description: str) -> Dict[str, Any]:
+        """Generate criteria from JD (Placeholder if not already implemented)."""
+        # Note: This is a fallback if the file didn't already have it.
+        # Ideally this should use the same logic as evaluate_applicant but different prompt.
+        # For brevity in this fix, creating a simple version.
+        
+        prompt = f"""
+        Analyze the following job description and extract key hiring criteria.
+        Job Description:
+        {job_description}
+        
+        Return JSON format:
+        {{
+            "must_have": ["list of hard requirements"],
+            "nice_to_have": [{{ "criterion": "preference", "weight": "high/medium/low" }}],
+            "red_flags": ["list of negative signals to watch for"]
+        }}
+        """
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        
+        return json.loads(response.choices[0].message.content)
+
+    def generate_interview_questions(
+        self,
+        applicant_data: Dict[str, Any],
+        job_description: str,
+        config: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
+        """Generate specific interview questions."""
+        
+        # Default configuration
+        if not config:
+            config = {
+                "behavioral_count": 1,
+                "technical_count": 2,
+                "red_flag_count": 1,
+                "soft_skill_count": 0,
+                "custom_focus": None
+            }
+
+        total_questions = (
+            config.get("behavioral_count", 0) + 
+            config.get("technical_count", 0) + 
+            config.get("red_flag_count", 0) +
+            config.get("soft_skill_count", 0)
+        )
+        if total_questions == 0:
+            total_questions = 5
+
+        applicant_summary = f"""
+        Name: {applicant_data.get('applicant_name')}
+        Title: {applicant_data.get('profile_title')}
+        Skills: {', '.join(applicant_data.get('skills', []))}
+        Overview: {applicant_data.get('bio')}
+        Cover Letter: {applicant_data.get('cover_letter')}
+        """
+        
+        focus_prompt = ""
+        if config.get("custom_focus"):
+            focus_prompt = f"Additional focus: Please specifically ask about {config['custom_focus']}."
+
+        prompt = f"""
+        You are an expert technical recruiter preparing an interview guide.
+        
+        JOB DESCRIPTION:
+        {job_description[:1500]}...
+        
+        CANDIDATE PROFILE:
+        {applicant_summary}
+        
+        Generate {total_questions} high-quality, personalized interview questions to vet this specific candidate against the job.
+        
+        Configuration Requirements:
+        - Behavioral Questions: {config.get('behavioral_count', 1)}
+        - Technical Questions: {config.get('technical_count', 2)}
+        - Red Flag/Gap Analysis: {config.get('red_flag_count', 1)}
+        - Soft Skill/Culture: {config.get('soft_skill_count', 0)}
+        {focus_prompt}
+        
+        Rules:
+        1. "Context" should explain to the interviewer why they are asking this.
+        2. "Expected Answer" should give brief bullet points of what a good answer looks like.
+        
+        Return a JSON object with this exact structure:
+        {{
+          "questions": [
+            {{
+                "type": "Behavioral" | "Technical" | "Red Flag" | "Soft Skill",
+                "question": "The question text",
+                "context": "Why ask this / what to look for",
+                "expected_answer": "Key points to listen for"
+            }}
+          ]
+        }}
+        """
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
+            )
+            
+            content = response.choices[0].message.content
+            data = json.loads(content)
+            
+            if isinstance(data, dict) and "questions" in data:
+                return data["questions"]
+            elif isinstance(data, list):
+                return data
+            else:
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error generating interview questions: {e}")
+            return []
+
+    def chat_with_candidate(
+        self,
+        query: str,
+        applicant_data: Dict[str, Any],
+        job_description: str,
+        chat_history: List[Dict[str, Any]]
+    ) -> str:
+        """Chat with the candidate's profile."""
+        
+        system_prompt = f"""
+        You are "The Investigator", an expert technical recruiter assistant. 
+        Your goal is to answer questions about a specific job applicant based *strictly* on their provided profile data.
+        
+        JOB CONTEXT:
+        {job_description[:1000]}...
+        
+        CANDIDATE DATA:
+        Name: {applicant_data.get('applicant_name')}
+        Title: {applicant_data.get('profile_title')}
+        Skills: {', '.join(applicant_data.get('skills', []))}
+        Bio: {applicant_data.get('bio')}
+        Cover Letter: {applicant_data.get('cover_letter')}
+        Work History: {applicant_data.get('work_history_summary')}
+        Certifications: {', '.join(applicant_data.get('certifications', []))}
+        Portfolio: {str(applicant_data.get('portfolio_items', []))}
+        
+        INSTRUCTIONS:
+        1. Answer the user's question accurately based on the Candidate Data.
+        2. If the information is not in the profile, explicitly say "The profile does not mention..."
+        3. Be critical but fair. Point out inconsistencies if asked.
+        4. Keep answers concise and professional.
+        """
+
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ]
+        
+        # Add history (limit to last 10 messages to save context)
+        for msg in chat_history[-10:]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+            
+        # Add current query
+        messages.append({"role": "user", "content": query})
+
+        try:
+             # Reasoning models (o1, o3) logic again
+            if self.model.startswith(('o1', 'o3')):
+                # Merge system prompt into user prompt for o1 models
+                messages = [{"role": "user", "content": system_prompt + "\n\nChat History:\n" + str(chat_history[-5:]) + "\n\nQuestion: " + query}]
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error in chat_with_candidate: {e}")
+            return "I apologized, but I encountered an error analyzing the profile for this question."
+
