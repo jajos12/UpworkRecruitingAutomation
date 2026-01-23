@@ -30,10 +30,11 @@ from backend.models import (
     PipelineRunRequest, PipelineStatus, DaemonStatus, AnalysisResult,
     GenerateCriteriaRequest, JobCriteriaModel, ConfigUpdate,
     InterviewGuide, InterviewQuestion, InterviewGenerationConfig,
-    ChatRequest, ChatMessage
+    ChatRequest, ChatMessage, LoginRequest
 )
 from backend.data_manager import DataManager
 from backend.websocket_manager import ws_manager
+from backend.auth import auth_manager, get_current_user
 from backend.mock_data import seed_mock_data
 from backend import mock_data
 from backend.database import init_db
@@ -102,6 +103,29 @@ except Exception as e:
 # Pipeline status
 pipeline_status = PipelineStatus(running=False)
 daemon_status = DaemonStatus(running=False)
+
+
+# ============================================================================
+# Auth endpoints
+# ============================================================================
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest):
+    """
+    Authenticate user and return JWT token.
+    Uses Supabase Auth backend.
+    """
+    result = auth_manager.login(request.email, request.password)
+    return result
+
+@app.post("/api/auth/signup")
+async def signup(request: LoginRequest):
+    """
+    Create a new user.
+    """
+    result = auth_manager.signup(request.email, request.password)
+    return result
+
 
 
 # ============================================================================

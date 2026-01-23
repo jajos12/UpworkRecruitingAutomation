@@ -3,7 +3,7 @@
 import { Proposal, InterviewGuide, InterviewQuestion, ChatMessage } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, XCircle, AlertTriangle, ExternalLink, ThumbsUp, ThumbsDown, Minus, Loader2, Sparkles, User as UserIcon, MessageSquare, ClipboardList, Mic2, Send, Bot } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, ExternalLink, ThumbsUp, ThumbsDown, Minus, Loader2, Sparkles, User as UserIcon, MessageSquare, ClipboardList, Mic, MicOff, Send, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUpdateProposalStatus, useAnalyzeProposal, useGenerateInterviewGuide, useChatWithCandidate } from '../hooks/useJobs';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +27,39 @@ export function CandidateDetail({ proposal }: CandidateDetailProps) {
   const [interviewGuide, setInterviewGuide] = useState<InterviewGuide | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [messageInput, setMessageInput] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      setIsRecording(false);
+      (window as any).recognition?.stop();
+    } else {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Browser does not support speech recognition.");
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      
+      recognition.onstart = () => setIsRecording(true);
+      recognition.onend = () => setIsRecording(false);
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setMessageInput(prev => (prev ? prev + " " + transcript : transcript));
+      };
+      
+      try {
+        recognition.start();
+        (window as any).recognition = recognition;
+      } catch (e) {
+        console.error("Speech recognition error:", e);
+        setIsRecording(false);
+      }
+    }
+  };
 
   const [configOpen, setConfigOpen] = useState(false);
   const [config, setConfig] = useState({
@@ -182,7 +215,7 @@ export function CandidateDetail({ proposal }: CandidateDetailProps) {
           <TabsList className="bg-transparent h-12 p-0 space-x-6">
             <TabsTrigger value="overview" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:text-emerald-400 bg-transparent px-0 pb-0 text-zinc-400">Overview</TabsTrigger>
             <TabsTrigger value="interview" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:text-emerald-400 bg-transparent px-0 pb-0 text-zinc-400 flex items-center gap-2">
-                 <Mic2 className="w-3 h-3" /> Interview Guide
+                 <ClipboardList className="w-3 h-3" /> Interview Guide
             </TabsTrigger>
             <TabsTrigger value="chat" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:text-blue-400 bg-transparent px-0 pb-0 text-zinc-400 flex items-center gap-2">
                  <Bot className="w-3 h-3" /> Investigator
@@ -421,6 +454,15 @@ export function CandidateDetail({ proposal }: CandidateDetailProps) {
                     placeholder="Ask about skills, experience, or potential red flags..."
                     className="flex-1 bg-zinc-900 border-zinc-800"
                  />
+                 <Button 
+                    type="button"
+                    variant="ghost" 
+                    size="icon"
+                    className={cn(isRecording ? "text-red-500 bg-red-950/20" : "text-zinc-400")}
+                    onClick={toggleRecording}
+                 >
+                     {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                 </Button>
                  <Button type="submit" disabled={chatWithCandidate.isPending || !messageInput.trim()} size="icon">
                      <Send className="w-4 h-4" />
                  </Button>
