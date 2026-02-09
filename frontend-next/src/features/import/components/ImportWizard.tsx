@@ -8,7 +8,7 @@ import { useJobs, useAnalyzeJob } from '@/features/jobs/hooks/useJobs';
 import { ParsedApplicant } from '../types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { CheckCircle2, ArrowRight, Users, Zap, ExternalLink } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Users, Zap, ExternalLink, AlertCircle, X } from 'lucide-react';
 import Link from 'next/link';
 
 type Step = 'input' | 'review' | 'success';
@@ -19,6 +19,7 @@ export function ImportWizard() {
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [importedJobId, setImportedJobId] = useState('');
   const [importResult, setImportResult] = useState<{ count: number; failed: number } | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
 
   const { data: jobs = [] } = useJobs();
   const parseMutation = useParseRawText();
@@ -26,6 +27,7 @@ export function ImportWizard() {
   const analyzeJob = useAnalyzeJob();
 
   const handleParse = async (jobId: string, rawText: string, formatHint?: string) => {
+    setParseError(null);
     try {
       const result = await parseMutation.mutateAsync({ jobId, rawText, formatHint });
       setParsedApplicants(result.applicants);
@@ -35,10 +37,11 @@ export function ImportWizard() {
       if (result.applicants.length > 0) {
         setStep('review');
       } else {
-        alert('No applicants could be extracted from the text. Try a different format or more detailed data.');
+        setParseError('No applicants could be extracted from the data. Make sure you\'re uploading files that contain applicant profiles (names, skills, cover letters, etc.).');
       }
     } catch (error: any) {
-      alert(error?.response?.data?.detail || 'Failed to parse the data. Please try again.');
+      const detail = error?.response?.data?.detail;
+      setParseError(detail || 'Failed to parse the data. The file may not contain recognizable applicant information.');
     }
   };
 
@@ -56,7 +59,7 @@ export function ImportWizard() {
       });
       setStep('success');
     } catch (error: any) {
-      alert(error?.response?.data?.detail || 'Failed to import applicants. Please try again.');
+      setParseError(error?.response?.data?.detail || 'Failed to import applicants. Please try again.');
     }
   };
 
@@ -65,11 +68,12 @@ export function ImportWizard() {
     setParsedApplicants([]);
     setParseWarnings([]);
     setImportResult(null);
+    setParseError(null);
   };
 
   // Step indicator
   const steps = [
-    { key: 'input', label: 'Paste Data', num: 1 },
+    { key: 'input', label: 'Import Data', num: 1 },
     { key: 'review', label: 'Review', num: 2 },
     { key: 'success', label: 'Done', num: 3 },
   ];
@@ -83,29 +87,40 @@ export function ImportWizard() {
         {steps.map((s, i) => (
           <div key={s.key} className="flex items-center">
             <div className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono border transition-colors ${
-                i < currentStepIndex
-                  ? 'bg-emerald-600 border-emerald-600 text-white'
-                  : i === currentStepIndex
-                    ? 'bg-zinc-800 border-emerald-500 text-emerald-400'
-                    : 'bg-zinc-900 border-zinc-700 text-zinc-600'
-              }`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono border transition-colors ${i < currentStepIndex
+                ? 'bg-emerald-600 border-emerald-600 text-white'
+                : i === currentStepIndex
+                  ? 'bg-zinc-800 border-emerald-500 text-emerald-400'
+                  : 'bg-zinc-900 border-zinc-700 text-zinc-600'
+                }`}>
                 {i < currentStepIndex ? <CheckCircle2 className="w-4 h-4" /> : s.num}
               </div>
-              <span className={`text-sm font-medium ${
-                i <= currentStepIndex ? 'text-zinc-300' : 'text-zinc-600'
-              }`}>
+              <span className={`text-sm font-medium ${i <= currentStepIndex ? 'text-zinc-300' : 'text-zinc-600'
+                }`}>
                 {s.label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div className={`w-12 h-px mx-3 ${
-                i < currentStepIndex ? 'bg-emerald-600' : 'bg-zinc-800'
-              }`} />
+              <div className={`w-12 h-px mx-3 ${i < currentStepIndex ? 'bg-emerald-600' : 'bg-zinc-800'
+                }`} />
             )}
           </div>
         ))}
       </div>
+
+      {/* Error Banner */}
+      {parseError && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-red-900/50 bg-red-950/20 text-red-300">
+          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-red-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-300 mb-0.5">Parsing Failed</p>
+            <p className="text-xs text-red-400/80">{parseError}</p>
+          </div>
+          <button onClick={() => setParseError(null)} className="p-1 rounded hover:bg-red-900/30 text-red-500 hover:text-red-300 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Step Content */}
       {step === 'input' && (

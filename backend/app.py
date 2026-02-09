@@ -932,34 +932,46 @@ async def parse_raw_import(request: BulkImportRequest):
         parsed_applicants = []
         for i, raw in enumerate(raw_applicants):
             try:
+                # Use `or` fallbacks — dict.get("key", default) won't work
+                # when the AI explicitly returns None for a key
                 freelancer = FreelancerProfile(
-                    freelancer_id=raw.get("freelancer_id", f"import-unknown-{i+1}"),
-                    name=raw.get("name", f"Unknown Applicant #{i+1}"),
-                    title=raw.get("title", "Freelancer"),
+                    freelancer_id=raw.get("freelancer_id") or f"import-{i+1}",
+                    name=raw.get("name") or f"Unknown Applicant #{i+1}",
+                    title=raw.get("title") or "Freelancer",
                     hourly_rate=raw.get("hourly_rate"),
                     job_success_score=raw.get("job_success_score"),
                     total_earnings=raw.get("total_earnings"),
                     top_rated_status=raw.get("top_rated_status"),
-                    skills=raw.get("skills", []) or [],
-                    bio=raw.get("bio"),
-                    certifications=raw.get("certifications", []) or [],
-                    portfolio_items=raw.get("portfolio_items", []) or [],
+                    skills=raw.get("skills") or [],
+                    bio=raw.get("bio") or "",
+                    certifications=raw.get("certifications") or [],
+                    portfolio_items=raw.get("portfolio_items") or [],
                     work_history_summary=raw.get("work_history_summary"),
                     profile_url=raw.get("profile_url")
                 )
 
                 parsed_applicants.append(ParsedApplicant(
                     freelancer=freelancer,
-                    cover_letter=raw.get("cover_letter", "") or "",
-                    bid_amount=float(raw.get("bid_amount", 0) or 0),
+                    cover_letter=raw.get("cover_letter") or "",
+                    bid_amount=float(raw.get("bid_amount") or 0),
                     estimated_duration=raw.get("estimated_duration"),
                     screening_answers=raw.get("screening_answers"),
-                    confidence=float(raw.get("confidence", 0.5)),
-                    parse_notes=raw.get("parse_notes", []) or []
+                    confidence=float(raw.get("confidence") or 0.5),
+                    parse_notes=raw.get("parse_notes") or []
                 ))
             except Exception as e:
                 warnings.append(f"Failed to parse applicant #{i+1}: {str(e)}")
                 logger.warning(f"Failed to parse applicant #{i+1}: {e}")
+
+        # If the AI "found" applicants but ALL of them failed validation,
+        # that strongly suggests the input wasn't real applicant data
+        if len(raw_applicants) > 0 and len(parsed_applicants) == 0:
+            raise HTTPException(
+                status_code=422,
+                detail="The uploaded data doesn't appear to contain valid applicant profiles. "
+                       "Please make sure you're uploading files with applicant information "
+                       "(names, skills, cover letters, etc.)."
+            )
 
         return BulkImportParseResponse(
             applicants=parsed_applicants,

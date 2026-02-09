@@ -1,0 +1,5 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-f', 'Dockerfile.backend', '-t', 'gcr.io/neomeet-462422/upwork-agent-backend', '.']
+images:
+- 'gcr.io/neomeet-462422/upwork-agent-backend'

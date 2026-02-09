@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+frontend-next/node_modules
+frontend-next/.next
+__pycache__
+*.pyc
+.env
+.env.local
+secrets/
+*.db
+*.sqlite3
+_cloudbuild_backend.yaml
