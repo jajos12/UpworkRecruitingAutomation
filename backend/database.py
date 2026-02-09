@@ -9,6 +9,13 @@ import os
 # Database URL from environment or fallback to local SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./upwork_agent.db")
 
+# Validate DATABASE_URL - fall back to SQLite if it's a placeholder or invalid
+if (not SQLALCHEMY_DATABASE_URL 
+    or "your_" in SQLALCHEMY_DATABASE_URL 
+    or "_here" in SQLALCHEMY_DATABASE_URL
+    or "://" not in SQLALCHEMY_DATABASE_URL):
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./upwork_agent.db"
+
 # Fix for some platforms (like Supabase/Heroku) returning "postgres://" instead of "postgresql://"
 if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
