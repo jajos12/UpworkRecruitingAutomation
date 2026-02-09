@@ -197,6 +197,49 @@ class ProgressEvent(BaseModel):
     message: str
 
 
+# ============================================================================
+# Bulk Import Models
+# ============================================================================
+
+class BulkImportRequest(BaseModel):
+    """Request to parse raw applicant data with AI."""
+    job_id: str
+    raw_text: str = Field(..., min_length=10, max_length=100000)
+    input_format_hint: Optional[str] = Field(None, description="csv, markdown, plain, json, or auto")
+
+
+class ParsedApplicant(BaseModel):
+    """A single applicant parsed from raw text."""
+    freelancer: FreelancerProfile
+    cover_letter: str = ""
+    bid_amount: float = 0.0
+    estimated_duration: Optional[str] = None
+    screening_answers: Optional[str] = None
+    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Parsing confidence 0-1")
+    parse_notes: List[str] = Field(default_factory=list, description="Warnings about this parse")
+
+
+class BulkImportParseResponse(BaseModel):
+    """Response from AI parsing of raw text."""
+    applicants: List[ParsedApplicant]
+    total_found: int
+    parse_warnings: List[str] = Field(default_factory=list)
+
+
+class BulkImportConfirmRequest(BaseModel):
+    """Confirm and save parsed applicants to database."""
+    job_id: str
+    applicants: List[ParsedApplicant]
+    auto_analyze: bool = False
+
+
+class BulkImportConfirmResponse(BaseModel):
+    """Result of saving parsed applicants."""
+    imported_count: int
+    proposal_ids: List[str]
+    failed: List[Dict[str, str]] = Field(default_factory=list)
+
+
 class ConfigUpdate(BaseModel):
     """Model for updating system configuration."""
     # AI Configuration

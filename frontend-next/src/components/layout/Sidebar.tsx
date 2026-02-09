@@ -3,19 +3,21 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Users, 
-  Settings, 
-  TerminalSquare, 
-  Bot
+import {
+  LayoutDashboard,
+  Briefcase,
+  Users,
+  Settings,
+  TerminalSquare,
+  Bot,
+  Upload
 } from 'lucide-react';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/jobs', label: 'Jobs', icon: Briefcase },
   { href: '/candidates', label: 'Candidates', icon: Users },
+  { href: '/import', label: 'Bulk Import', icon: Upload },
   { href: '/logs', label: 'System Logs', icon: TerminalSquare },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

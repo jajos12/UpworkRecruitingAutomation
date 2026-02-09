@@ -1,6 +1,7 @@
 """Mock AI Analyzer for testing and development without API costs."""
 
 import random
+import re
 from typing import Dict, Any, List
 from src.ai_providers.base_analyzer import BaseAIAnalyzer
 from src.utils.logger import get_logger
@@ -112,6 +113,59 @@ class MockAIAnalyzer(BaseAIAnalyzer):
                 "expected_answer": None
             }
         ]
+
+    def parse_raw_applicants(
+        self,
+        raw_text: str,
+        job_context: str = None,
+        format_hint: str = None
+    ) -> Dict[str, Any]:
+        """Generate mock parsed applicants from raw text."""
+        logger.info("Mock parsing raw applicant data...")
+
+        # Simple heuristic: split by double newlines or "---" to guess applicant count
+        sections = re.split(r'\n{3,}|---+|\n={3,}', raw_text.strip())
+        sections = [s.strip() for s in sections if len(s.strip()) > 20]
+
+        if not sections:
+            sections = [raw_text]
+
+        applicants = []
+        for i, section in enumerate(sections):
+            # Try to extract a name from the first line
+            lines = section.strip().split('\n')
+            name = lines[0].strip().rstrip(':').strip('# ').strip('*')
+            if len(name) > 60 or len(name) < 2:
+                name = f"Unknown Applicant #{i + 1}"
+
+            slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+
+            applicants.append({
+                "freelancer_id": f"import-{slug}-{i + 1}",
+                "name": name,
+                "title": "Freelancer",
+                "hourly_rate": round(random.uniform(20, 80), 2),
+                "job_success_score": random.randint(70, 99),
+                "total_earnings": round(random.uniform(5000, 100000), 2),
+                "top_rated_status": random.choice([None, "Top Rated", "Top Rated Plus"]),
+                "skills": ["Python", "JavaScript", "React"],
+                "bio": section[:200] if len(section) > 20 else "No bio extracted",
+                "certifications": [],
+                "portfolio_items": [],
+                "work_history_summary": None,
+                "profile_url": None,
+                "cover_letter": section if len(section) > 50 else "",
+                "bid_amount": round(random.uniform(500, 5000), 2),
+                "estimated_duration": "1-2 weeks",
+                "screening_answers": None,
+                "confidence": 0.6,
+                "parse_notes": ["[MOCK] Data generated from text heuristics, not AI-parsed"]
+            })
+
+        return {
+            "applicants": applicants,
+            "warnings": ["[MOCK MODE] Using mock parser - data is auto-generated, not AI-extracted"]
+        }
 
     def chat_with_candidate(
         self,

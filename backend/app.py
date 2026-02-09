@@ -30,7 +30,10 @@ from backend.models import (
     PipelineRunRequest, PipelineStatus, DaemonStatus, AnalysisResult,
     GenerateCriteriaRequest, JobCriteriaModel, ConfigUpdate,
     InterviewGuide, InterviewQuestion, InterviewGenerationConfig,
-    ChatRequest, ChatMessage, LoginRequest
+    ChatRequest, ChatMessage, LoginRequest,
+    BulkImportRequest, ParsedApplicant, BulkImportParseResponse,
+    BulkImportConfirmRequest, BulkImportConfirmResponse,
+    FreelancerProfile
 )
 from backend.data_manager import DataManager
 from backend.websocket_manager import ws_manager
@@ -891,6 +894,162 @@ async def analyze_job_proposals(job_id: str, force: bool = False, background_tas
         "status": "processing",
         "analyzed": len(to_analyze) # Expected count
     }
+
+
+# ============================================================================
+# Bulk Import Endpoints
+# ============================================================================
+
+@app.post("/api/import/parse", response_model=BulkImportParseResponse)
+async def parse_raw_import(request: BulkImportRequest):
+    """
+    Parse raw text into structured applicant profiles using AI.
+    Returns parsed data for review - does NOT save to database.
+    """
+    if not ai_analyzer:
+        raise HTTPException(
+            status_code=503,
+            detail="AI analyzer not available. Please configure an AI provider in Settings."
+        )
+
+    # Verify job exists
+    job = data_manager.get_job(request.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        # Call AI to parse raw text
+        result = ai_analyzer.parse_raw_applicants(
+            raw_text=request.raw_text,
+            job_context=job.description,
+            format_hint=request.input_format_hint
+        )
+
+        raw_applicants = result.get("applicants", [])
+        warnings = result.get("warnings", [])
+
+        # Convert raw AI output to ParsedApplicant models
+        parsed_applicants = []
+        for i, raw in enumerate(raw_applicants):
+            try:
+                freelancer = FreelancerProfile(
+                    freelancer_id=raw.get("freelancer_id", f"import-unknown-{i+1}"),
+                    name=raw.get("name", f"Unknown Applicant #{i+1}"),
+                    title=raw.get("title", "Freelancer"),
+                    hourly_rate=raw.get("hourly_rate"),
+                    job_success_score=raw.get("job_success_score"),
+                    total_earnings=raw.get("total_earnings"),
+                    top_rated_status=raw.get("top_rated_status"),
+                    skills=raw.get("skills", []) or [],
+                    bio=raw.get("bio"),
+                    certifications=raw.get("certifications", []) or [],
+                    portfolio_items=raw.get("portfolio_items", []) or [],
+                    work_history_summary=raw.get("work_history_summary"),
+                    profile_url=raw.get("profile_url")
+                )
+
+                parsed_applicants.append(ParsedApplicant(
+                    freelancer=freelancer,
+                    cover_letter=raw.get("cover_letter", "") or "",
+                    bid_amount=float(raw.get("bid_amount", 0) or 0),
+                    estimated_duration=raw.get("estimated_duration"),
+                    screening_answers=raw.get("screening_answers"),
+                    confidence=float(raw.get("confidence", 0.5)),
+                    parse_notes=raw.get("parse_notes", []) or []
+                ))
+            except Exception as e:
+                warnings.append(f"Failed to parse applicant #{i+1}: {str(e)}")
+                logger.warning(f"Failed to parse applicant #{i+1}: {e}")
+
+        return BulkImportParseResponse(
+            applicants=parsed_applicants,
+            total_found=len(parsed_applicants),
+            parse_warnings=warnings
+        )
+
+    except Exception as e:
+        logger.error(f"Error parsing raw import data: {e}")
+        raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
+
+
+@app.post("/api/import/confirm", response_model=BulkImportConfirmResponse)
+async def confirm_import(request: BulkImportConfirmRequest, background_tasks: BackgroundTasks):
+    """
+    Save reviewed/edited applicants as proposals in the database.
+    Optionally triggers batch AI analysis after import.
+    """
+    # Verify job exists
+    job = data_manager.get_job(request.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    imported_ids = []
+    failed = []
+
+    for applicant in request.applicants:
+        try:
+            proposal_data = ProposalCreate(
+                job_id=request.job_id,
+                freelancer=applicant.freelancer,
+                cover_letter=applicant.cover_letter if len(applicant.cover_letter) >= 10 else "No cover letter provided (imported via bulk import)",
+                bid_amount=applicant.bid_amount if applicant.bid_amount > 0 else 0.01,
+                estimated_duration=applicant.estimated_duration,
+                screening_answers=applicant.screening_answers
+            )
+
+            new_proposal = data_manager.create_proposal(proposal_data)
+            imported_ids.append(new_proposal.proposal_id)
+
+            # Broadcast activity
+            await ws_manager.broadcast_activity(
+                "proposal_imported",
+                f"Imported {applicant.freelancer.name} via bulk import",
+                {"proposal_id": new_proposal.proposal_id, "job_id": request.job_id}
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to import {applicant.freelancer.name}: {e}")
+            failed.append({"name": applicant.freelancer.name, "error": str(e)})
+
+    # Update stats
+    await ws_manager.broadcast_stats(data_manager.get_stats())
+
+    await ws_manager.broadcast_activity(
+        "bulk_import_complete",
+        f"Bulk import complete: {len(imported_ids)} imported, {len(failed)} failed",
+        {"job_id": request.job_id, "count": len(imported_ids)}
+    )
+
+    # Optionally trigger batch analysis
+    if request.auto_analyze and imported_ids and ai_analyzer:
+        background_tasks.add_task(_run_batch_analysis, request.job_id)
+
+    return BulkImportConfirmResponse(
+        imported_count=len(imported_ids),
+        proposal_ids=imported_ids,
+        failed=failed
+    )
+
+
+async def _run_batch_analysis(job_id: str):
+    """Helper to run batch analysis after import."""
+    try:
+        proposals = data_manager.get_proposals_for_job(job_id)
+        to_analyze = [p for p in proposals if p.ai_score is None]
+
+        for i, proposal in enumerate(to_analyze):
+            try:
+                await analyze_proposal(proposal.proposal_id)
+            except Exception as e:
+                logger.error(f"Batch analysis failed for {proposal.proposal_id}: {e}")
+
+            progress = (i + 1) / len(to_analyze)
+            await ws_manager.broadcast_progress(
+                "analysis", progress,
+                f"Analyzed {i + 1}/{len(to_analyze)} imported proposals"
+            )
+    except Exception as e:
+        logger.error(f"Batch analysis error: {e}")
 
 
 # ============================================================================

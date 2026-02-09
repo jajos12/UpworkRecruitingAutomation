@@ -1,7 +1,7 @@
 """Google Gemini AI analyzer implementation."""
 
 import json
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import google.generativeai as genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -315,6 +315,69 @@ Return your evaluation as JSON with this exact structure:
         except Exception as e:
             logger.error(f"Gemini error generating questions: {e}")
             return []
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    def parse_raw_applicants(
+        self,
+        raw_text: str,
+        job_context: str = None,
+        format_hint: str = None
+    ) -> Dict[str, Any]:
+        """Parse raw text into structured applicant data using Gemini."""
+        logger.info("Parsing raw applicant data with Gemini...")
+
+        prompt = self._build_parse_prompt(raw_text, job_context, format_hint)
+
+        try:
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.2,
+                    'max_output_tokens': 4096,
+                }
+            )
+
+            result_text = response.text.replace('```json', '').replace('```', '')
+            result = self._parse_json_response(result_text)
+
+            logger.info(f"Parsed {len(result.get('applicants', []))} applicants from raw text")
+            return result
+
+        except Exception as e:
+            logger.error(f"Gemini parsing failed: {e}")
+            return {"applicants": [], "warnings": [f"Parsing failed: {str(e)}"]}
+
+    def _build_parse_prompt(
+        self,
+        raw_text: str,
+        job_context: Optional[str] = None,
+        format_hint: Optional[str] = None
+    ) -> str:
+        """Build the prompt for parsing raw applicant text."""
+        return f"""Parse the following raw text into structured applicant profiles.
+
+The text may contain data for ONE or MULTIPLE applicants in any format (CSV, markdown, plain text, JSON, etc).
+
+{f'FORMAT HINT: The input appears to be in {format_hint} format.' if format_hint else ''}
+{f'JOB CONTEXT: This data is for the following job posting:\\n{job_context[:500]}' if job_context else ''}
+
+For EACH applicant, extract these fields (use null if not found):
+- name (required), title, hourly_rate (USD), job_success_score (0-100), total_earnings (USD)
+- top_rated_status ("Top Rated Plus"/"Top Rated"/null), skills (array), bio, certifications (array)
+- portfolio_items (array of {{title, desc}}), work_history_summary, profile_url
+- cover_letter, bid_amount (number), estimated_duration, screening_answers
+
+Generate freelancer_id as "import-<name-slug>-<index>". Set confidence (0-1) and parse_notes array for each.
+
+Return valid JSON: {{"applicants": [{{freelancer_id, name, title, hourly_rate, job_success_score, total_earnings, top_rated_status, skills, bio, certifications, portfolio_items, work_history_summary, profile_url, cover_letter, bid_amount, estimated_duration, screening_answers, confidence, parse_notes}}], "warnings": []}}
+
+RAW TEXT:
+---
+{raw_text}
+---"""
 
     def chat_with_candidate(
         self,

@@ -114,6 +114,28 @@ class BaseAIAnalyzer(ABC):
             The AI's response string
         """
         pass
+    @abstractmethod
+    def parse_raw_applicants(
+        self,
+        raw_text: str,
+        job_context: str = None,
+        format_hint: str = None
+    ) -> Dict[str, Any]:
+        """
+        Parse raw, unstructured text into structured applicant data.
+
+        Args:
+            raw_text: Raw text containing one or more applicant profiles
+            job_context: Optional job description for context
+            format_hint: Optional hint about input format (csv, markdown, plain, json)
+
+        Returns:
+            Dictionary with:
+                - applicants: List of parsed applicant dicts
+                - warnings: List of parsing warnings
+        """
+        pass
+
     def _determine_tier(self, score: int) -> int:
         """
         Determine tier based on score.

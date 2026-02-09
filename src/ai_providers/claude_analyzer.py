@@ -1,7 +1,8 @@
 """Claude (Anthropic) AI analyzer implementation."""
 
 import json
-from typing import Dict, List, Any
+import re
+from typing import Dict, List, Any, Optional
 from anthropic import Anthropic
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -324,6 +325,111 @@ Return your evaluation as JSON with this exact structure:
         except Exception as e:
             logger.error(f"Claude error generating questions: {e}")
             return []
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    def parse_raw_applicants(
+        self,
+        raw_text: str,
+        job_context: str = None,
+        format_hint: str = None
+    ) -> Dict[str, Any]:
+        """Parse raw text into structured applicant data using Claude."""
+        logger.info("Parsing raw applicant data with Claude...")
+
+        prompt = self._build_parse_prompt(raw_text, job_context, format_hint)
+
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            result_text = response.content[0].text
+            result = self._parse_json_response(result_text)
+
+            logger.info(f"Parsed {len(result.get('applicants', []))} applicants from raw text")
+            return result
+
+        except Exception as e:
+            logger.error(f"Claude parsing failed: {e}")
+            return {"applicants": [], "warnings": [f"Parsing failed: {str(e)}"]}
+
+    def _build_parse_prompt(
+        self,
+        raw_text: str,
+        job_context: Optional[str] = None,
+        format_hint: Optional[str] = None
+    ) -> str:
+        """Build the prompt for parsing raw applicant text."""
+        return f"""You are an expert data parser for a recruitment platform. Parse the following raw text into structured applicant profiles.
+
+The text may contain data for ONE or MULTIPLE applicants. It could be in any format: CSV, markdown table, plain text, copy-pasted from a website, JSON, email thread, or completely unstructured notes.
+
+{f'FORMAT HINT: The input appears to be in {format_hint} format.' if format_hint else ''}
+{f'JOB CONTEXT: This data is for the following job posting:\\n{job_context[:500]}' if job_context else ''}
+
+For EACH applicant you can identify, extract as many of these fields as possible:
+- name (string, required - use "Unknown Applicant #N" if not found)
+- title (string, their professional title/headline)
+- hourly_rate (number, in USD)
+- job_success_score (integer, 0-100 percentage)
+- total_earnings (number, in USD)
+- top_rated_status (string: "Top Rated Plus", "Top Rated", or null)
+- skills (array of strings)
+- bio (string, their profile overview/summary)
+- certifications (array of strings)
+- portfolio_items (array of objects with "title" and "desc" keys)
+- work_history_summary (string)
+- profile_url (string, URL to their profile)
+- cover_letter (string, their proposal/cover letter text)
+- bid_amount (number, their proposed rate/bid for this job)
+- estimated_duration (string, e.g. "2 weeks")
+- screening_answers (string, answers to screening questions)
+
+RULES:
+1. If a field is not present in the text, use null (not empty string)
+2. Generate a unique freelancer_id for each applicant: "import-<name-slug>-<index>" (e.g. "import-john-doe-1")
+3. For skills, parse from any mention of technologies, tools, languages, or competencies
+4. Set a "confidence" score (0.0 to 1.0) for each applicant based on how much data you could extract
+5. Add "parse_notes" array with any warnings (e.g. "bid_amount not found, defaulting to 0")
+6. If the text is clearly NOT applicant data, return empty applicants array with a warning
+
+Return valid JSON with this exact structure:
+{{
+    "applicants": [
+        {{
+            "freelancer_id": "import-john-doe-1",
+            "name": "John Doe",
+            "title": "Senior Developer",
+            "hourly_rate": 50.0,
+            "job_success_score": 95,
+            "total_earnings": 50000.0,
+            "top_rated_status": "Top Rated",
+            "skills": ["Python", "JavaScript"],
+            "bio": "Experienced developer...",
+            "certifications": [],
+            "portfolio_items": [],
+            "work_history_summary": "5 years of experience...",
+            "profile_url": null,
+            "cover_letter": "I am excited to apply...",
+            "bid_amount": 2000.0,
+            "estimated_duration": "2 weeks",
+            "screening_answers": null,
+            "confidence": 0.85,
+            "parse_notes": ["hourly_rate estimated from bid"]
+        }}
+    ],
+    "warnings": []
+}}
+
+RAW TEXT TO PARSE:
+---
+{raw_text}
+---"""
 
     def chat_with_candidate(
         self,

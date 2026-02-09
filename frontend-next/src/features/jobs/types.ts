@@ -36,6 +36,9 @@ export interface FreelancerProfile {
   top_rated_status?: string;
   skills: string[];
   bio?: string;
+  certifications?: string[];
+  portfolio_items?: Array<{ title: string; desc: string }>;
+  work_history_summary?: string;
   profile_url?: string;
 }
 
