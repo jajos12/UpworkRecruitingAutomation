@@ -457,7 +457,7 @@ Return your evaluation as JSON with this exact structure:
 The text may contain data for ONE or MULTIPLE applicants in any format (CSV, markdown, plain text, JSON, etc).
 
 {f'FORMAT HINT: The input appears to be in {format_hint} format.' if format_hint else ''}
-{f'JOB CONTEXT: This data is for the following job posting:\\n{job_context[:500]}' if job_context else ''}
+{('JOB CONTEXT: This data is for the following job posting:\n' + job_context[:500]) if job_context else ''}
 
 For EACH applicant, extract these fields (use null if not found):
 - name (required), title, hourly_rate (USD), job_success_score (0-100), total_earnings (USD)

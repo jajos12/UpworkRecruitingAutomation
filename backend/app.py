@@ -1235,10 +1235,13 @@ async def startup_event():
     logger.info("API docs available at http://localhost:8000/docs")
     
     # Auto-seed mock data if starting with empty database
-    if len(data_manager.get_all_jobs()) == 0:
-        logger.info("Auto-seeding mock data for testing...")
-        seed_mock_data(data_manager, ws_manager, ai_analyzer)
-        logger.info("Mock data seeded successfully")
+    try:
+        if len(data_manager.get_all_jobs()) == 0:
+            logger.info("Auto-seeding mock data for testing...")
+            seed_mock_data(data_manager, ws_manager, ai_analyzer)
+            logger.info("Mock data seeded successfully")
+    except Exception as e:
+        logger.warning(f"Could not auto-seed data (DB may be unavailable): {e}")
     
     logger.info(f"AI Analyzer: {'Available' if ai_analyzer else 'Not available'}")
     logger.info("")
