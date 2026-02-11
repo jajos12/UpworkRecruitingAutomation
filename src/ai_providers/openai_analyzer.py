@@ -452,12 +452,19 @@ Return your evaluation as JSON with this exact structure:
         format_hint: Optional[str] = None
     ) -> str:
         """Build the prompt for parsing raw applicant text."""
+        
+        # Pre-calculate strings to avoid backslashes in f-string expressions (Python 3.11 limitation)
+        format_hint_str = f'FORMAT HINT: The input appears to be in {format_hint} format.' if format_hint else ''
+        job_context_str = ""
+        if job_context:
+            job_context_str = f"JOB CONTEXT: This data is for the following job posting:\n{job_context[:500]}"
+            
         return f"""Parse the following raw text into structured applicant profiles.
 
 The text may contain data for ONE or MULTIPLE applicants in any format (CSV, markdown, plain text, JSON, etc).
 
-{f'FORMAT HINT: The input appears to be in {format_hint} format.' if format_hint else ''}
-{('JOB CONTEXT: This data is for the following job posting:\n' + job_context[:500]) if job_context else ''}
+{format_hint_str}
+{job_context_str}
 
 For EACH applicant, extract these fields (use null if not found):
 - name (required), title, hourly_rate (USD), job_success_score (0-100), total_earnings (USD)
