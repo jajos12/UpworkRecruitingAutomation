@@ -391,7 +391,7 @@ export function RawInputForm({ jobs, onParse, isParsing }: RawInputFormProps) {
       {/* Sidebar */}
       <div className="flex flex-col gap-4">
         {/* Job Selector */}
-        <Card className="border-zinc-800 bg-zinc-950/50">
+        <Card variant="glass" className="">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Select Job</CardTitle>
             <CardDescription className="text-xs">Which job are these applicants for?</CardDescription>
@@ -418,7 +418,7 @@ export function RawInputForm({ jobs, onParse, isParsing }: RawInputFormProps) {
         </Card>
 
         {/* Format Hint */}
-        <Card className="border-zinc-800 bg-zinc-950/50">
+        <Card variant="glass" className="">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Format Hint</CardTitle>
             <CardDescription className="text-xs">Help the AI understand the format (optional)</CardDescription>
@@ -451,7 +451,7 @@ export function RawInputForm({ jobs, onParse, isParsing }: RawInputFormProps) {
         </Card>
 
         {/* Help */}
-        <Card className="border-zinc-800 bg-zinc-950/50">
+        <Card variant="glass" className="">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2 text-xs text-zinc-500">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />

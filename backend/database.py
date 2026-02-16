@@ -22,13 +22,25 @@ if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://")
 
 # Configure engine arguments based on database type
 connect_args = {}
+pool_kwargs = {}
+
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+else:
+    # Production pool tuning for PostgreSQL (Supabase/pgBouncer compatible)
+    pool_kwargs = {
+        "pool_size": 10,          # Base connections kept open
+        "max_overflow": 20,       # Extra connections under load
+        "pool_recycle": 300,      # Recycle connections every 5min (pgBouncer compat)
+        "pool_pre_ping": True,    # Test connections before use (handles Cloud Run cold starts)
+        "pool_timeout": 30,       # Wait up to 30s for a connection
+    }
 
 # Create engine
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args=connect_args
+    connect_args=connect_args,
+    **pool_kwargs
 )
 
 # Create SessionLocal class

@@ -318,24 +318,28 @@ class DataManager:
     # ========================================================================
     
     def get_stats(self) -> dict:
-        """Get overall statistics."""
+        """Get overall statistics in a single optimized query."""
+        from sqlalchemy import func, case
         db = self._get_db()
         try:
-            total_jobs = db.query(JobModel).count()
-            total_proposals = db.query(ProposalModel).count()
+            total_jobs = db.query(func.count(JobModel.job_id)).scalar() or 0
             
-            tier1 = db.query(ProposalModel).filter(ProposalModel.ai_tier == 1).count()
-            tier2 = db.query(ProposalModel).filter(ProposalModel.ai_tier == 2).count()
-            tier3 = db.query(ProposalModel).filter(ProposalModel.ai_tier == 3).count()
-            pending = db.query(ProposalModel).filter(ProposalModel.ai_tier == None).count()
+            # Single query for all proposal stats using conditional aggregation
+            stats = db.query(
+                func.count(ProposalModel.proposal_id).label("total"),
+                func.count(case((ProposalModel.ai_tier == 1, 1))).label("t1"),
+                func.count(case((ProposalModel.ai_tier == 2, 1))).label("t2"),
+                func.count(case((ProposalModel.ai_tier == 3, 1))).label("t3"),
+                func.count(case((ProposalModel.ai_tier == None, 1))).label("pending"),
+            ).one()
             
             return {
                 "total_jobs": total_jobs,
-                "total_proposals": total_proposals,
-                "tier1_count": tier1,
-                "tier2_count": tier2,
-                "tier3_count": tier3,
-                "pending_count": pending
+                "total_proposals": stats.total,
+                "tier1_count": stats.t1,
+                "tier2_count": stats.t2,
+                "tier3_count": stats.t3,
+                "pending_count": stats.pending
             }
         finally:
             db.close()

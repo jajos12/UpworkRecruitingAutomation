@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional
 import asyncio
@@ -67,6 +68,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# GZip compression for API responses (min 500 bytes)
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 # CORS middleware for development
 app.add_middleware(
     CORSMiddleware,
@@ -75,6 +79,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Simple stats cache (avoids re-querying DB on every page load)
+import time as _time
+_stats_cache = {"data": None, "ts": 0}
+_STATS_TTL = 5  # seconds
 
 # Initialize data manager
 data_manager = DataManager()
@@ -573,6 +582,20 @@ async def update_config(config: ConfigUpdate):
 
 
 # ============================================================================
+# Stats Endpoint
+# ============================================================================
+
+@app.get("/api/stats")
+async def get_stats():
+    """Get dashboard statistics with caching."""
+    now = _time.time()
+    if _stats_cache["data"] is None or (now - _stats_cache["ts"]) > _STATS_TTL:
+        _stats_cache["data"] = data_manager.get_stats()
+        _stats_cache["ts"] = now
+    return _stats_cache["data"]
+
+
+# ============================================================================
 # Job Endpoints
 # ============================================================================
 
@@ -803,7 +826,7 @@ async def analyze_proposal(proposal_id: str):
         )
         
         # Run analysis
-        result = ai_analyzer.evaluate_applicant(applicant_data, criteria, job.description)
+        result = await asyncio.to_thread(ai_analyzer.evaluate_applicant, applicant_data, criteria, job.description)
         
         # Create analysis result
         analysis = AnalysisResult(
@@ -919,10 +942,11 @@ async def parse_raw_import(request: BulkImportRequest):
 
     try:
         # Call AI to parse raw text
-        result = ai_analyzer.parse_raw_applicants(
-            raw_text=request.raw_text,
-            job_context=job.description,
-            format_hint=request.input_format_hint
+        result = await asyncio.to_thread(
+            ai_analyzer.parse_raw_applicants,
+            request.raw_text,
+            job.description,
+            request.input_format_hint
         )
 
         raw_applicants = result.get("applicants", [])
